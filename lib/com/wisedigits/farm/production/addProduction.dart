@@ -846,32 +846,60 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
               else
                 TypeAheadField<AnimalForFilter>(
                   controller: _animalController,
+                  decorationBuilder: (context, child) {
+                    return Material(
+                      elevation: 4,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: child,
+                      ),
+                    );
+                  },
                   builder: (context, controller, focusNode) {
                     return TextFormField(
                       controller: controller,
                       focusNode: focusNode,
                       decoration: const InputDecoration(
-                        labelText: 'Animal (Optional if Shade is selected)',
-                        hintText: 'Start typing animal tag number...',
+                        labelText: 'Animal',
+                        hintText: 'Start typing animal tag number or ID...',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.pets),
                       ),
                       keyboardType: TextInputType.text,
                       validator: (value) {
-                        if (_selectedAnimalId == null || !_allAnimals.any((animal) => animal.id == _selectedAnimalId && animal.tagNumber == value)) {
-                          return 'Please select a valid animal from the suggestions.';
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter or select an animal';
+                        }
+                        final exists = _allAnimals.any((animal) =>
+                        animal.tagNumber.toLowerCase() == value.toLowerCase() ||
+                            animal.id.toString() == value);
+                        if (!exists) {
+                          return 'Please select a valid animal from the suggestions';
+                        }
+                        final selectedAnimal = _allAnimals.firstWhere(
+                              (animal) =>
+                          animal.tagNumber.toLowerCase() == value.toLowerCase() ||
+                              animal.id.toString() == value,
+                          orElse: () => AnimalForFilter(id: -1, tagNumber: ''),
+                        );
+                        if (selectedAnimal.id != -1) {
+                          setState(() {
+                            _selectedAnimalId = selectedAnimal.id;
+                          });
                         }
                         return null;
                       },
                     );
                   },
                   suggestionsCallback: (pattern) async {
+                    print('DEBUG: Animal search pattern: $pattern');
                     if (pattern.isEmpty) {
-
-
-                      return [];
+                      return _allAnimals;
                     }
-                    return _allAnimals.where((animal) => animal.tagNumber.toLowerCase().contains(pattern.toLowerCase())).toList();
+                    return _allAnimals.where((animal) =>
+                    animal.tagNumber.toLowerCase().contains(pattern.toLowerCase()) ||
+                        animal.id.toString().contains(pattern)).toList();
                   },
                   itemBuilder: (context, AnimalForFilter suggestion) {
                     return ListTile(
@@ -881,6 +909,7 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
                   },
                   onSelected: (AnimalForFilter suggestion) {
                     setState(() {
+                      _animalController.text = suggestion.tagNumber;
                       _selectedAnimalId = suggestion.id;
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -889,12 +918,17 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
                     _formKey.currentState?.validate();
                   },
                   loadingBuilder: (context) => const Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: Text('Loading animals...', style: TextStyle(color: Colors.grey)),
-                      ),
+                    padding: EdgeInsets.all(8.0),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
                   errorBuilder: (context, error) => Padding(
                     padding: const EdgeInsets.all(8.0),
-                    child: Text('Error loading suggestions: $error', style: const TextStyle(color: Colors.red)),
+                    child: Text('Error loading suggestions: $error',
+                        style: const TextStyle(color: Colors.red)),
+                  ),
+                  emptyBuilder: (context) => const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text('No animals found', style: TextStyle(color: Colors.grey)),
                   ),
                 ),
               const SizedBox(height: 16),
@@ -911,59 +945,89 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
               else
                 TypeAheadField<FarmSession>(
                   controller: _sessionController,
+                  decorationBuilder: (context, child) {
+                    return Material(
+                      elevation: 4,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: child,
+                      ),
+                    );
+                  },
                   builder: (context, controller, focusNode) {
                     return TextFormField(
                       controller: controller,
                       focusNode: focusNode,
                       decoration: const InputDecoration(
-                        labelText: 'Farm Session',
-                        hintText: 'Start typing session ID...',
+                        labelText: 'Session',
+                        hintText: 'Start typing',
                         border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.event),
+                        prefixIcon: Icon(Icons.pets),
                       ),
-                      keyboardType: TextInputType.number,
+                      keyboardType: TextInputType.text,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please select or enter a farm session';
+                          return 'Please enter or select a session';
                         }
-                        if (_selectedSessionId == null || !_allSessions.any((session) => session.id == _selectedSessionId && session.id.toString() == value)) {
-                          return 'Please select a valid session from the suggestions.';
+                        final exists = _allSessions.any((farmSession) =>
+                        farmSession.name.toLowerCase() == value.toLowerCase() ||
+                            farmSession.id.toString() == value);
+                        if (!exists) {
+                          return 'Please select a valid session from the suggestions';
+                        }
+                        final selectedSession = _allSessions.firstWhere(
+                              (farmSession) =>
+                          farmSession.name.toLowerCase() == value.toLowerCase() ||
+                              farmSession.id.toString() == value,
+                          orElse: () => FarmSession(id: -1, name: ''),
+                        );
+                        if (selectedSession.id != -1) {
+                          setState(() {
+                            _selectedSessionId = selectedSession.id;
+                          });
                         }
                         return null;
                       },
                     );
                   },
                   suggestionsCallback: (pattern) async {
+                    print('DEBUG: Animal search pattern: $pattern');
                     if (pattern.isEmpty) {
-                      return [];
+                      return _allSessions;
                     }
-                    return _allSessions.where((session) => session.id.toString().contains(pattern)).toList();
+                    return _allSessions.where((farmSession) =>
+                    farmSession.name.toLowerCase().contains(pattern.toLowerCase()) ||
+                        farmSession.id.toString().contains(pattern)).toList();
                   },
                   itemBuilder: (context, FarmSession suggestion) {
                     return ListTile(
-                      title: Text('Session ${suggestion.id}'),
-                      subtitle: suggestion.date != null
-                          ? Text(DateFormat('yyyy-MM-dd').format(suggestion.date!))
-                          : null,
+                      title: Text(suggestion.name),
+                      subtitle: Text('ID: ${suggestion.id}'),
                     );
                   },
                   onSelected: (FarmSession suggestion) {
                     setState(() {
-                      _sessionController.text = suggestion.id.toString();
+                      _sessionController.text = suggestion.name;
                       _selectedSessionId = suggestion.id;
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Selected Session: ${suggestion.id}')),
+                      SnackBar(content: Text('Selected Session: ${suggestion.name}')),
                     );
                     _formKey.currentState?.validate();
                   },
                   loadingBuilder: (context) => const Padding(
                     padding: EdgeInsets.all(8.0),
-                    child: Text('Loading sessions...', style: TextStyle(color: Colors.grey)),
+                    child: Center(child: CircularProgressIndicator()),
                   ),
                   errorBuilder: (context, error) => Padding(
                     padding: const EdgeInsets.all(8.0),
-                    child: Text('Error loading suggestions: $error', style: const TextStyle(color: Colors.red)),
+                    child: Text('Error loading suggestions: $error',
+                        style: const TextStyle(color: Colors.red)),
+                  ),
+                  emptyBuilder: (context) => const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text('No sessions found', style: TextStyle(color: Colors.grey)),
                   ),
                 ),
               const SizedBox(height: 16),
