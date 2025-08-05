@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:math';
+import 'package:farmapp/com/wisedigits/crm/persons/persondetails.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -171,12 +173,21 @@ class Person {
 
   factory Person.fromJson(Map<String, dynamic> json) {
     Color? parseColor(String? hexColor) {
-      if (hexColor == null || hexColor.isEmpty) return null;
+      if (hexColor == null || hexColor.isEmpty) {
+        print("parseColor: hexColor is null or empty");
+        return null;
+      }
       try {
-        final hex = hexColor.replaceFirst('#', '');
+        String hex = hexColor.replaceFirst('#', '').replaceFirst('0x', '');
+        if (hex.length != 6 && hex.length != 8) {
+          print("parseColor: Invalid hex length for $hexColor");
+          return null;
+        }
         final intColor = int.parse(hex, radix: 16);
+        // Ensure 8-bit alpha channel if 6-digit hex
         return Color(hex.length == 6 ? (0xFF000000 | intColor) : intColor);
       } catch (e) {
+        print("parseColor: Error parsing $hexColor: $e");
         return null;
       }
     }
@@ -188,7 +199,7 @@ class Person {
       positionid: json['positionid'] is num ? (json['positionid'] as num).toInt() : null,
       cadreid: json['cadreid'] is num ? (json['cadreid'] as num).toInt() : null,
       specialityid: json['specialityid'] is num ? (json['specialityid'] as num).toInt() : null,
-      specialityName: json['speciality_name'] as String? ?? 'N/A',
+      specialityName: json['specialityName'] as String? ?? 'N/A',
       classeid: json['classeid'] is num ? (json['classeid'] as num).toInt() : null,
       email: json['email'] as String? ?? 'N/A',
       tel: json['tel'] as String? ?? 'N/A',
@@ -199,7 +210,7 @@ class Person {
       photoUrl: json['photo_url'] as String?,
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
       lastAppointment: json['last_appointment'] != null
-          ? DateTime.tryParse(json['last_appointment'] as String)
+          ? DateFormat("yyyy-MM-dd").parse(json['last_appointment'] as String)
           : null,
       timesSeenMonth: json['times_seen_month'] is num ? (json['times_seen_month'] as num).toInt() : null,
       timesSeenQuarter: json['times_seen_quarter'] is num ? (json['times_seen_quarter'] as num).toInt() : null,
@@ -399,8 +410,17 @@ class _PersonsListPageState extends State<PersonsListPage> {
   bool _isLoading = false;
   String? _errorMessage;
   bool _isSearching = false;
+  String? _selectedColor;
   final TextEditingController _searchController = TextEditingController();
   final String _phpEndpoint = '${Config.sisiUrl}/persons/getPersons.php';
+
+  static const Map<String, Color> _colorOptions = {
+    'All': Colors.transparent,
+    'Green': Color(0xFFEBFCEB), // Extremely Pale Green
+    'Blue': Color(0xFFF0F9FC),  // Extremely Pale Blue
+    'Amber': Color(0xFFFFFBE9), // Extremely Pale Amber
+    'Red': Color(0xFFFFF3F5),   // Extremely Pale Red
+  };
 
   @override
   void initState() {
@@ -418,10 +438,11 @@ class _PersonsListPageState extends State<PersonsListPage> {
     try {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
       final authToken = sessionProvider.currentUser?.token;
+      final employeeid = sessionProvider.currentUser?.employeeid;
 
       print(_phpEndpoint);
       final response = await http.get(
-        Uri.parse(_phpEndpoint),
+        Uri.parse(_phpEndpoint+'?employeeid='+employeeid!),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $authToken',
@@ -437,6 +458,7 @@ class _PersonsListPageState extends State<PersonsListPage> {
             _persons = (responseData['data'] as List<dynamic>)
                 .map((json) => Person.fromJson(json))
                 .toList();
+
             _filteredPersons = _persons;
             _isLoading = false;
           });
@@ -470,11 +492,21 @@ class _PersonsListPageState extends State<PersonsListPage> {
         final tel = person.tel?.toLowerCase() ?? '';
         final location = person.location?.toLowerCase() ?? '';
         final speciality = person.specialityName?.toLowerCase() ?? '';
-        return name.contains(query) ||
+
+        final matchesText = name.contains(query) ||
             email.contains(query) ||
             tel.contains(query) ||
             location.contains(query) ||
             speciality.contains(query);
+
+        // Color-based filtering
+        final matchesColor = _selectedColor == null ||
+            _selectedColor == 'All' ||
+            (person.cardColor != null &&
+                person.cardColor!.value == _colorOptions[_selectedColor]!.value);
+
+        return matchesText && matchesColor;
+
       }).toList();
     });
   }
@@ -539,6 +571,34 @@ class _PersonsListPageState extends State<PersonsListPage> {
             tooltip: _isSearching ? 'Cancel' : 'Search',
             onPressed: _toggleSearch,
           ),
+          // Add color filter dropdown
+          DropdownButton<String>(
+            value: _selectedColor ?? 'All',
+            onChanged: (String? newValue) {
+              setState(() {
+                _selectedColor = newValue;
+                _filterPersons();
+              });
+            },
+            items: _colorOptions.keys.map((String colorName) {
+              return DropdownMenuItem<String>(
+                value: colorName,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 16,
+                      height: 16,
+                      color: _colorOptions[colorName],
+                    ),
+                    const SizedBox(width: 8),
+                    Text(colorName),
+                  ],
+                ),
+              );
+            }).toList(),
+            underline: const SizedBox(),
+            icon: const Icon(Icons.filter_list, color: Colors.white),
+          ),
         ],
       ),
       body: _isLoading
@@ -566,8 +626,9 @@ class _PersonsListPageState extends State<PersonsListPage> {
         itemCount: _filteredPersons.length,
         itemBuilder: (context, index) {
           final person = _filteredPersons[index];
+          print("COLOR: ${person.name}: ${person.cardColor}");
           return Card(
-            color: person.cardColor ?? Colors.white,
+            color: person.cardColor,
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
               leading: CircleAvatar(
@@ -586,28 +647,29 @@ class _PersonsListPageState extends State<PersonsListPage> {
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(person.email ?? 'N/A'),
-                  const SizedBox(height: 4),
+                  Text(person.tel ?? 'N/A'),
+                  // const SizedBox(height: 1),
                   Text(
-                    'Speciality: ${person.specialityName ?? 'N/A'}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    'Last Seen: ${person.lastAppointment}',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  Text(
+                    'Speciality: ${person.specialityName?.trim() ?? 'N/A'}',
+                    style: TextStyle(fontSize: 13),
                   ),
                   Text(
                     'Location: ${person.location ?? 'N/A'}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 13),
                   ),
                 ],
               ),
               onTap: () {
-                Navigator.pushNamed(
+                  Navigator.push(
                   context,
-                  '/person-details',
-                  arguments: person,
-                ).then((value) {
-                  if (value == true) {
-                    _fetchPersons();
-                  }
-                });
+                  MaterialPageRoute(
+                    builder: (context) => PersonDetailsPage(person: person),
+                   ),
+                  );
               },
             ),
           );

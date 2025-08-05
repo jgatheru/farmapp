@@ -31,14 +31,19 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
 
   Future<void> _fetchInitialData() async {
     setState(() => _isLoading = true);
+
+    final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
+    final authToken = sessionProvider.currentUser?.token;
+    final employeeid = sessionProvider.currentUser?.employeeid;
+
     await Future.wait([
       _fetchEntityList(
-        endpoint: '${Config.sisiUrl}/facilitys/getFacilitys.php',
+        endpoint: '${Config.sisiUrl}/facilitys/getFacilitys.php?employeeid='+employeeid!,
         listSetter: (list) => _facilities = list.cast<Facility>(),
         fromJson: Facility.fromJson,
       ),
       _fetchEntityList(
-        endpoint: '${Config.sisiUrl}/persons/getPersons.php',
+        endpoint: '${Config.sisiUrl}/persons/getPersons.php?employeeid='+employeeid!,
         listSetter: (list) => _persons = list.cast<Person>(),
         fromJson: Person.fromJson,
       ),
@@ -103,12 +108,15 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
 
     try {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
+      final employeeid = sessionProvider.currentUser?.employeeid;
+      
       final queryParams = {
         if (selectedFacility != null) 'facilityid': selectedFacility.id.toString(),
         if (selectedPerson != null) 'personid': selectedPerson.id.toString(),
         if (selectedSpeciality != null) 'speciality': selectedSpeciality,
         if (fromDate != null) 'fromdate': DateFormat('yyyy-MM-dd').format(fromDate),
         if (toDate != null) 'todate': DateFormat('yyyy-MM-dd').format(toDate),
+        'employeeid': employeeid,
       };
       final uri = Uri.parse('${Config.sisiUrl}/appointments/getAppointmentReport.php')
           .replace(queryParameters: queryParams);
@@ -124,7 +132,7 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        print(response.body);
+
         final responseData = jsonDecode(response.body);
         if (responseData['success'] == true && responseData['data'] != null) {
           setState(() {
@@ -177,7 +185,12 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isLargeScreen = screenWidth > 600;
+    final textScaleFactor = isLargeScreen ? 1.0 : 0.9;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Appointment Report'),
@@ -185,7 +198,7 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: (){
+          onPressed: () {
             Navigator.of(context).pushReplacementNamed('/home');
           },
         ),
@@ -207,25 +220,161 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
             if (_errorMessage != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.red, fontSize: 16),
+                ),
               ),
             if (_reportData.isNotEmpty)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Employee Name')),
-                    DataColumn(label: Text('Total Scheduled')),
-                    DataColumn(label: Text('Total Attended')),
-                    DataColumn(label: Text('Total Not Closed')),
+                  columnSpacing: isLargeScreen ? 24 : 16,
+                  dataRowMinHeight: 48,
+                  dataRowMaxHeight: 56,
+                  headingRowHeight: 56,
+                  border: TableBorder(
+                    horizontalInside: BorderSide(
+                      color: Colors.grey.shade300,
+                      width: 1,
+                    ),
+                    verticalInside: BorderSide(
+                      color: Colors.grey.shade300,
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  headingRowColor: WidgetStateProperty.all(
+                    (Config.themeColor ?? Colors.teal).withOpacity(0.1),
+                  ),
+                  columns: [
+                    DataColumn(
+                      label: Text(
+                        'Name',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Date',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Scheduled',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Attended',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Not Closed',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
                   ],
-                  rows: _reportData.map((data) {
-                    return DataRow(cells: [
-                      DataCell(Text(data['employee_name'] ?? 'Unknown')),
-                      DataCell(Text(data['total_scheduled'].toString())),
-                      DataCell(Text(data['total_attended'].toString())),
-                      DataCell(Text(data['total_not_closed'].toString())),
-                    ]);
+                  rows: _reportData.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final data = entry.value;
+                    return DataRow(
+                      color: WidgetStateProperty.all(
+                        index % 2 == 0
+                            ? Colors.white
+                            : (Config.backgroundColor ?? Colors.blueGrey).withOpacity(0.05),
+                      ),
+                      cells: [
+                        DataCell(
+                          Container(
+                            constraints: BoxConstraints(maxWidth: isLargeScreen ? 200 : 150),
+                            child: Text(
+                              data['employee_name'] ?? 'N/A',
+                              style: TextStyle(
+                                fontSize: 14 * textScaleFactor,
+                                color: Colors.black87,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Container(
+                            constraints: BoxConstraints(maxWidth: isLargeScreen ? 120 : 100),
+                            child: Text(
+                              data['appointmentdate'] ?? 'N/A',
+                              style: TextStyle(
+                                fontSize: 14 * textScaleFactor,
+                                color: Colors.black87,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['total_scheduled'].toString(),
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['total_attended'].toString(),
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['total_not_closed'].toString(),
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                      ],
+                    );
                   }).toList(),
                 ),
               )

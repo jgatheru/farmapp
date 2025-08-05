@@ -14,4 +14,8 @@ class Config {
   static final Color themeColor = Colors.green;
   static final Color? backgroundColor = Colors.green[700];
 
+  static const int system = 2;
+  static const String clientTitle = "Sisi Pharmaceuticals";
+  // static const String clientTitle = "Wonnie Farm";
+
 }

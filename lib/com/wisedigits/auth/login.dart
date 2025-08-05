@@ -19,10 +19,11 @@ class _LoginPageState extends State<LoginPage> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool isAgent = true;
-  bool _isLoading = false; // New state variable for loading indicator
+  bool _isLoading = false;
+  bool _obscureText = true;
 
-  // Replace with your actual PHP endpoint URL
-  final String _phpEndpoint = '${Config.baseUrl}/auth/token?with-user=1';
+  late String _phpEndpoint = '${Config.baseUrl}/auth/token?with-user=1';
+  final String _phpEndpointSisi = '${Config.sisiUrl}/auth/login.php';
 
   Future<void> _login() async {
     // Basic validation: check if both username and password fields are filled
@@ -35,6 +36,9 @@ class _LoginPageState extends State<LoginPage> {
       _isLoading = true; // Show loading indicator
     });
 
+    if(Config.system==2) {
+      _phpEndpoint = _phpEndpointSisi;
+    }
     print(_phpEndpoint);
     try {
       final response = await http.post(
@@ -44,7 +48,8 @@ class _LoginPageState extends State<LoginPage> {
         },
         body: jsonEncode(<String, String>{
           'username': _usernameController.text,
-          'password': _passwordController.text
+          'password': _passwordController.text,
+          'action': "Login"
         }),
       );
 
@@ -52,22 +57,25 @@ class _LoginPageState extends State<LoginPage> {
         _isLoading = false; // Hide loading indicator
       });
 
-
       if (response.statusCode == 200) {
 
         final Map<String, dynamic> responseData = jsonDecode(response.body);
 
-        //print('DEBUG: API Response: $responseData');
+        print('DEBUG: API Response: $responseData');
 
         // if (responseData['success'] == true) {
 
           //set retrieved values to session here
           final userData = responseData['user'];
 
+          print(userData);
+
           // Set user data in SessionProvider
           await Provider.of<SessionProvider>(context, listen: false).login(
+
             username: userData['username'] ?? '',
             fullName: userData['name'] ?? '',
+            role: userData['role']?? '',
             isAgent: userData['isAgent'] == 1 || userData['isAgent'] == true,
             userid: userData['userid']?.toString() ?? '',
             employeeid: userData['employeeid']?.toString() ?? '',
@@ -75,6 +83,7 @@ class _LoginPageState extends State<LoginPage> {
             avatar: userData['avatar'],
             email: userData['email'] ?? '',
             levelid: userData['levelid']?.toString() ?? '',
+
           );
 
           Navigator.pushReplacementNamed(context, '/home');
@@ -120,7 +129,8 @@ class _LoginPageState extends State<LoginPage> {
           children: [
             // Displaying a cow icon from assets
             // Make sure you have 'assets/cow_icon.png' in your project and declared in pubspec.yaml
-            Image.asset(
+            if (Config.system == 1) ...[
+              Image.asset(
               'assets/logo.png',
               height: 200,
               // Fallback for when the image is not found
@@ -132,6 +142,22 @@ class _LoginPageState extends State<LoginPage> {
                 );
               },
             ),
+          ],
+            if (Config.system == 2) ...[
+              Image.asset(
+                // 'assets/logo.png',
+                '',
+                height: 200,
+                // Fallback for when the image is not found
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(
+                    Icons.pets, // A generic pet icon as a fallback
+                    size: 100,
+                    color: Colors.grey,
+                  );
+                },
+              ),
+            ],
             const SizedBox(height: 20), // Spacer
             // Username input field
             Padding(
@@ -143,14 +169,24 @@ class _LoginPageState extends State<LoginPage> {
             ),
             // Password input field
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0), // Added const
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: TextField(
                 controller: _passwordController,
-                decoration: const InputDecoration( // Added const
+                decoration: InputDecoration(
                   labelText: 'Password',
-                  suffixIcon: Icon(Icons.visibility), // Eye icon for visibility toggle (not implemented)
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscureText ? Icons.visibility : Icons.visibility_off,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscureText = !_obscureText; // Toggle password visibility
+                      });
+                    },
+                  ),
                 ),
-                obscureText: true, // Hides password characters
+                obscureText: _obscureText, // Use state variable to control obscurity
               ),
             ),
             // Radio buttons for selecting user type (Agent/Employee)

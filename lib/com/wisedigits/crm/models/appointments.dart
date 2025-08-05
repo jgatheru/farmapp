@@ -82,6 +82,7 @@ class Appointment {
   final String? location;
   final String? longitude;
   final String? latitude;
+  final String? products;
   final int? status;
   final int? rescheduled;
   final String? remarks;
@@ -120,6 +121,7 @@ class Appointment {
     this.location,
     this.longitude,
     this.latitude,
+    this.products,
     this.status,
     this.rescheduled,
     this.remarks,
@@ -162,6 +164,7 @@ class Appointment {
       longitude: json['longitude']?.toString(),
       latitude: json['latitude']?.toString(),
       status: int.tryParse(json['status']?.toString() ?? '') ?? null,
+      products: json['products']?.toString(),
       rescheduled: int.tryParse(json['rescheduled']?.toString() ?? '') ?? null,
       remarks: json['remarks']?.toString(),
       ipAddress: json['ipaddress']?.toString(),

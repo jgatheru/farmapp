@@ -4,10 +4,11 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
-
+import 'dart:async';
 import '../../../../config.dart';
 import '../../auth/SessionProvider.dart';
 import '../models/appointments.dart';
+import '../models/rating.dart'; // Import the Rating model
 
 class AddAppointmentPage extends StatefulWidget {
   final Appointment? appointment;
@@ -20,7 +21,7 @@ class AddAppointmentPage extends StatefulWidget {
 
 class _AddAppointmentPageState extends State<AddAppointmentPage> {
   final _formKey = GlobalKey<FormState>();
-  String? _entityType = 'facility'; // Default to facility
+  String? _entityType = 'person';
   Facility? _selectedFacility;
   Person? _selectedPerson;
   DateTime? _appointmentDate;
@@ -51,18 +52,23 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
 
   Future<void> _fetchEntities() async {
     setState(() => _isLoading = true);
+
+    final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
+    final employeeid = sessionProvider.currentUser?.employeeid;
+
     await Future.wait([
       _fetchEntityList(
-        endpoint: '${Config.sisiUrl}/facilitys/getFacilitys.php',
+        endpoint: '${Config.sisiUrl}/facilitys/getFacilitys.php?employeeid=$employeeid',
         listSetter: (list) => _facilities = list.cast<Facility>(),
         fromJson: Facility.fromJson,
       ),
       _fetchEntityList(
-        endpoint: '${Config.sisiUrl}/persons/getPersons.php',
+        endpoint: '${Config.sisiUrl}/persons/getPersons.php?employeeid=$employeeid',
         listSetter: (list) => _persons = list.cast<Person>(),
         fromJson: Person.fromJson,
       ),
     ]);
+
     setState(() => _isLoading = false);
   }
 
@@ -145,11 +151,15 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
     try {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
       final authToken = sessionProvider.currentUser?.token;
+      final employeeid = sessionProvider.currentUser?.employeeid;
+      final userid = sessionProvider.currentUser?.userid;
 
       final body = {
         'type': _entityType == 'facility' ? 'physical' : 'remote',
         'facilityid': _selectedFacility?.id.toString(),
         'personid': _selectedPerson?.id.toString(),
+        'employeeid': employeeid,
+        'action': 'Add',
         'appointmentdate': _appointmentDate != null
             ? DateFormat('yyyy-MM-dd').format(_appointmentDate!)
             : null,
@@ -157,12 +167,13 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
             ? _appointmentTime!.format(context)
             : null,
         'status': '0',
+        'userid': userid,
       };
 
       final isEdit = widget.appointment != null;
       final response = await http.post(
         Uri.parse(isEdit
-            ? '${Config.sisiUrl}/appointments/${widget.appointment!.id}'
+            ? '${Config.sisiUrl}/appointments/create.php?id=${widget.appointment!.id}'
             : '${Config.sisiUrl}/appointments/create.php'),
         headers: {
           'Accept': 'application/json',
@@ -252,7 +263,7 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Autocomplete<String>(
                 optionsBuilder: (TextEditingValue textEditingValue) {
                   final query = textEditingValue.text.toLowerCase();
@@ -297,7 +308,7 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                   );
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               TextFormField(
                 readOnly: true,
                 decoration: InputDecoration(
@@ -313,7 +324,7 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
                 onTap: () => _selectDate(context),
                 validator: (value) => _appointmentDate == null ? 'Date is required' : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               TextFormField(
                 readOnly: true,
                 decoration: InputDecoration(
@@ -344,190 +355,9 @@ class _AddAppointmentPageState extends State<AddAppointmentPage> {
   }
 }
 
-// Placeholder for AppointmentDetailsPage (extend as needed)
-class AppointmentDetailsPage extends StatelessWidget {
-  final Appointment appointment;
-
-  const AppointmentDetailsPage({super.key, required this.appointment});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Appointment Details'),
-        backgroundColor: Config.backgroundColor ?? Colors.blueGrey,
-        foregroundColor: Colors.white,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Name: ${appointment.facility?.name ?? appointment.person?.name ?? "Unknown"}',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text('Date: ${appointment.appointmentDate ?? "N/A"}'),
-            Text('Type: ${appointment.type ?? "N/A"}'),
-            Text('Location: ${appointment.location ?? "N/A"}'),
-            Text('Action: ${appointment.action ?? "N/A"}'),
-            Text('Reaction: ${appointment.reaction ?? "N/A"}'),
-            Text('Rating: ${appointment.ratingId != null ? ["Firm", "Commitment", "No"][appointment.ratingId! - 1] : "N/A"}'),
-            Text('Follow-up: ${appointment.followup ?? "N/A"}'),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProductSelectionPage(appointment: appointment),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Config.themeColor,
-                minimumSize: const Size(double.infinity, 50),
-              ),
-              child: const Text('Proceed'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class ProductSelectionPage extends StatefulWidget {
-  final Appointment appointment;
-
-  const ProductSelectionPage({super.key, required this.appointment});
-
-  @override
-  State<ProductSelectionPage> createState() => _ProductSelectionPageState();
-}
-
-class _ProductSelectionPageState extends State<ProductSelectionPage> {
-  List<Product> _products = [];
-  List<int> _selectedProductIds = [];
-  bool _isLoading = false;
-  String? _errorMessage;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchProducts();
-  }
-
-  Future<void> _fetchProducts() async {
-    setState(() => _isLoading = true);
-    try {
-      final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
-      final response = await http.get(
-        Uri.parse('${Config.sisiUrl}/products/getProducts.php'),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer ${sessionProvider.currentUser?.token}',
-        },
-      );
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        if (responseData['success'] == true && responseData['data'] != null) {
-          setState(() {
-            _products = (responseData['data'] as List<dynamic>)
-                .map((json) => Product.fromJson(json as Map<String, dynamic>))
-                .toList();
-            _isLoading = false;
-          });
-        } else {
-          setState(() {
-            _isLoading = false;
-            _errorMessage = 'Failed to load products';
-          });
-        }
-      } else {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Server error: ${response.statusCode}';
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Error fetching products: $e';
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Select Products'),
-        backgroundColor: Config.backgroundColor ?? Colors.blueGrey,
-        foregroundColor: Colors.white,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
-          ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)))
-          : Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: _products.length,
-              itemBuilder: (context, index) {
-                final product = _products[index];
-                return CheckboxListTile(
-                  title: Text(product.name),
-                  value: _selectedProductIds.contains(product.id),
-                  onChanged: (bool? value) {
-                    setState(() {
-                      if (value == true) {
-                        _selectedProductIds.add(product.id);
-                      } else {
-                        _selectedProductIds.remove(product.id);
-                      }
-                    });
-                  },
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => UpdateAppointmentPage(
-                      appointment: widget.appointment,
-                      selectedProductIds: _selectedProductIds,
-                    ),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Config.themeColor,
-                minimumSize: const Size(double.infinity, 50),
-              ),
-              child: const Text('Proceed to Update'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class UpdateAppointmentPage extends StatefulWidget {
   final Appointment appointment;
-  final List<int> selectedProductIds;
+  final List<Product> selectedProductIds;
 
   const UpdateAppointmentPage({
     super.key,
@@ -544,53 +374,115 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
   String? _locationType = 'physical';
   final TextEditingController _actionController = TextEditingController();
   final TextEditingController _reactionController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _facilityNameController = TextEditingController();
   final TextEditingController _followupController = TextEditingController();
-  String? _rating = 'Firm';
-  bool _isLoading = false;
+  String? _rating;
+  bool _isLoading = true;
   String? _errorMessage;
   String? _latitude;
   String? _longitude;
+  List<Rating> _ratings = [];
 
   @override
   void initState() {
     super.initState();
     _actionController.text = widget.appointment.action ?? '';
     _reactionController.text = widget.appointment.reaction ?? '';
+    _locationController.text = widget.appointment.location ?? 'Fetching landmark...';
+    _facilityNameController.text = widget.appointment.facility?.name ?? '';
     _followupController.text = widget.appointment.followup ?? '';
-    _rating = widget.appointment.ratingId != null
-        ? ['Firm', 'Commitment', 'No'][widget.appointment.ratingId! - 1]
-        : 'Firm';
+    _fetchRatings();
     _checkLocationPermission();
   }
 
-  Future<void> _checkLocationPermission() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      setState(() {
-        _errorMessage = 'Location services are disabled. Please enable them.';
-      });
-      return;
-    }
+  Future<void> _fetchRatings() async {
+    try {
+      final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
+      final response = await http.get(
+        Uri.parse('${Config.sisiUrl}/ratings/getRatings.php'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer ${sessionProvider.currentUser?.token}',
+        },
+      );
 
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        if (responseData['success'] == true && responseData['data'] != null) {
+          final List<dynamic> jsonList = responseData['data'];
+          setState(() {
+            _ratings = jsonList.map((json) => Rating.fromJson(json as Map<String, dynamic>)).toList();
+            if (widget.appointment.ratingId != null) {
+              final selectedRating = _ratings.firstWhere(
+                    (rating) => rating.id == widget.appointment.ratingId,
+                orElse: () => _ratings.isNotEmpty ? _ratings[0] : Rating(id: 0, name: 'Unknown'),
+              );
+              _rating = selectedRating.name;
+            } else if (_ratings.isNotEmpty) {
+              _rating = _ratings[0].name;
+            }
+          });
+        } else {
+          setState(() {
+            _errorMessage = 'Failed to load ratings';
+          });
+        }
+      } else {
         setState(() {
-          _errorMessage = 'Location permissions are denied.';
+          _errorMessage = 'Server error: ${response.statusCode}';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Error fetching ratings: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _checkLocationPermission() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _errorMessage = 'Location services are disabled. Please enable them.';
+          _locationController.text = widget.appointment.location ?? 'Location unavailable';
+          _isLoading = false;
         });
         return;
       }
-    }
 
-    if (permission == LocationPermission.deniedForever) {
-      setState(() {
-        _errorMessage = 'Location permissions are permanently denied.';
-      });
-      return;
-    }
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _errorMessage = 'Location permissions are denied.';
+            _locationController.text = widget.appointment.location ?? 'Location unavailable';
+            _isLoading = false;
+          });
+          return;
+        }
+      }
 
-    try {
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _errorMessage = 'Location permissions are permanently denied.';
+          _locationController.text = widget.appointment.location ?? 'Location unavailable';
+          _isLoading = false;
+        });
+        return;
+      }
+
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
@@ -598,9 +490,55 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
         _latitude = position.latitude.toString();
         _longitude = position.longitude.toString();
       });
+
+      await _fetchLandmark(position.latitude, position.longitude);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Error getting location: $e';
+        _locationController.text = widget.appointment.location ?? 'Error fetching landmark';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _fetchLandmark(double latitude, double longitude) async {
+    final url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=$latitude&lon=$longitude&zoom=18&addressdetails=1';
+
+    print(url);
+    try {
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'User-Agent': 'MyFlutterApp/1.0 (your.email@example.com)', // Replace with your app name and contact email
+        },
+      );
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['error'] == null && data['display_name'] != null) {
+          final address = data['display_name'] as String?;
+          setState(() {
+            _locationController.text = address ?? widget.appointment.location ?? 'Unknown landmark';
+          });
+        } else {
+          setState(() {
+            _errorMessage = 'Nominatim error: ${data['error'] ?? 'No address found'}';
+            _locationController.text = widget.appointment.location ?? 'Unable to fetch landmark';
+          });
+        }
+      } else {
+        setState(() {
+          _errorMessage = 'Nominatim request failed: HTTP ${response.statusCode}';
+          _locationController.text = widget.appointment.location ?? 'Error fetching landmark';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Error fetching landmark: $e';
+        _locationController.text = widget.appointment.location ?? 'Error fetching landmark';
       });
     }
   }
@@ -623,20 +561,34 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
     try {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
       final authToken = sessionProvider.currentUser?.token;
+      final userId = sessionProvider.currentUser?.userid;
+
+      final selectedRating = _ratings.firstWhere(
+            (rating) => rating.name == _rating,
+        orElse: () => Rating(id: 0, name: 'Unknown'),
+      );
 
       final body = {
         'action': _actionController.text,
+        'id': widget.appointment.id,
         'reaction': _reactionController.text,
-        'ratingid': {'Firm': 1, 'Commitment': 2, 'No': 3}[_rating],
         'followup': _followupController.text,
-        'location': _locationType,
+        'ratingid': selectedRating.id.toString(),
+        'landmark': _locationController.text,
+        'facilityname': _facilityNameController.text,
+        'type': _locationType,
         'latitude': _latitude,
         'longitude': _longitude,
-        'products': widget.selectedProductIds,
+        'products': widget.selectedProductIds.map((product) => product.id).toList(),
+        'actionButton': 'Update',
+        'userid': userId,
       };
 
+      String url = '${Config.sisiUrl}/appointments/create.php?id=${widget.appointment.id}';
+      print(url);
+
       final response = await http.post(
-        Uri.parse('${Config.sisiUrl}/appointments/${widget.appointment.id}/update.php'),
+        Uri.parse(url),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $authToken',
@@ -670,12 +622,16 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
   void dispose() {
     _actionController.dispose();
     _reactionController.dispose();
+    _locationController.dispose();
+    _facilityNameController.dispose();
     _followupController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final selectedProductNames = widget.selectedProductIds.map((product) => product.name).toList();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Update Appointment'),
@@ -688,12 +644,17 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
-          child: Column(
+          child: ListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             children: [
               if (_errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                  child: Text(
+                    _errorMessage!,
+                    style: const TextStyle(color: Colors.red, fontSize: 16),
+                  ),
                 ),
               Row(
                 children: [
@@ -715,55 +676,156 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _actionController,
-                decoration: InputDecoration(
-                  labelText: 'Action',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.description, color: Config.themeColor),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 120,
+                child: RawScrollbar(
+                  thumbColor: Config.themeColor ?? Colors.blue,
+                  radius: const Radius.circular(8),
+                  thickness: 4,
+                  child: SingleChildScrollView(
+                    child: TextFormField(
+                      controller: _actionController,
+                      decoration: InputDecoration(
+                        labelText: 'Action',
+                        border: const OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.description, color: Config.themeColor ?? Colors.blue),
+                      ),
+                      maxLines: null,
+                      minLines: 3,
+                      keyboardType: TextInputType.multiline,
+                      scrollPhysics: const AlwaysScrollableScrollPhysics(),
+                      validator: (value) => value == null || value.isEmpty ? 'Action is required' : null,
+                    ),
+                  ),
                 ),
-                maxLines: 3,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _reactionController,
-                decoration: InputDecoration(
-                  labelText: 'Reaction',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.comment, color: Config.themeColor),
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: _rating,
                 decoration: InputDecoration(
                   labelText: 'Rating',
                   border: const OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.star, color: Config.themeColor),
+                  prefixIcon: Icon(Icons.star, color: Config.themeColor ?? Colors.blue),
                 ),
-                items: ['Firm', 'Commitment', 'No']
-                    .map((rating) => DropdownMenuItem(value: rating, child: Text(rating)))
+                items: _ratings
+                    .map((rating) => DropdownMenuItem(
+                  value: rating.name,
+                  child: Text(rating.name),
+                ))
                     .toList(),
                 onChanged: (value) => setState(() => _rating = value),
                 validator: (value) => value == null ? 'Rating is required' : null,
+                hint: _ratings.isEmpty ? const Text('Loading ratings...') : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               TextFormField(
-                controller: _followupController,
+                controller: _facilityNameController,
                 decoration: InputDecoration(
-                  labelText: 'Follow-up',
+                  labelText: 'Facility Name',
                   border: const OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.follow_the_signs, color: Config.themeColor),
+                  prefixIcon: Icon(Icons.business, color: Config.themeColor ?? Colors.blue),
                 ),
-                maxLines: 3,
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 120,
+                child: RawScrollbar(
+                  thumbColor: Config.themeColor ?? Colors.blue,
+                  radius: const Radius.circular(8),
+                  thickness: 4,
+                  child: SingleChildScrollView(
+                    child: TextFormField(
+                      controller: _reactionController,
+                      decoration: InputDecoration(
+                        labelText: 'Reaction',
+                        border: const OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.comment, color: Config.themeColor ?? Colors.blue),
+                      ),
+                      maxLines: null,
+                      minLines: 3,
+                      keyboardType: TextInputType.multiline,
+                      scrollPhysics: const AlwaysScrollableScrollPhysics(),
+                      validator: (value) => value == null || value.isEmpty ? 'Reaction is required' : null,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 120,
+                child: RawScrollbar(
+                  thumbColor: Config.themeColor ?? Colors.blue,
+                  radius: const Radius.circular(8),
+                  thickness: 4,
+                  child: SingleChildScrollView(
+                    child: TextFormField(
+                      controller: _followupController,
+                      decoration: InputDecoration(
+                        labelText: 'Follow-up',
+                        border: const OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.follow_the_signs, color: Config.themeColor ?? Colors.blue),
+                      ),
+                      maxLines: null,
+                      minLines: 3,
+                      keyboardType: TextInputType.multiline,
+                      scrollPhysics: const AlwaysScrollableScrollPhysics(),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                selectedProductNames.isNotEmpty
+                    ? 'Selected Products: ${selectedProductNames.join(', ')}'
+                    : 'No products selected',
+                style: TextStyle(
+                  color: selectedProductNames.isNotEmpty ? Colors.black : Colors.red,
+                  fontSize: 16,
+                  fontFamily: Theme.of(context).textTheme.bodyLarge?.fontFamily,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.place, color: Config.themeColor ?? Colors.blue),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Nearest Landmark',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            _locationController.text.isNotEmpty
+                                ? _locationController.text
+                                : widget.appointment.location ?? 'Unknown landmark',
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: _locationController.text.isNotEmpty ? Colors.black : Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _updateAppointment,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Config.themeColor,
+                  backgroundColor: Config.themeColor ?? Colors.blue,
                   minimumSize: const Size(double.infinity, 50),
                 ),
                 child: const Text('Update Appointment'),

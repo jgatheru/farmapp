@@ -11,14 +11,17 @@ import '../../../../config.dart';
 import '../../auth/SessionProvider.dart';
 import '../models/appointments.dart';
 import 'addAppointment.dart';
+import 'appointmentDetails.dart';
 
 // Constants for better maintainability
 const String _appointmentsEndpoint = '${Config.sisiUrl}/appointments/getAppointments.php';
-const Duration _requestTimeout = Duration(seconds: 15);
+const Duration _requestTimeout = Duration(seconds: 150);
 const Duration _searchDebounceDuration = Duration(milliseconds: 300);
 
 class AppointmentListPage extends StatefulWidget {
-  const AppointmentListPage({super.key});
+  final int reportType; // Changed to final for immutability
+
+  const AppointmentListPage(this.reportType, {super.key});
 
   @override
   State<AppointmentListPage> createState() => _AppointmentListPageState();
@@ -51,10 +54,12 @@ class _AppointmentListPageState extends State<AppointmentListPage> {
     try {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
       final authToken = sessionProvider.currentUser?.token;
+      final employeeid = sessionProvider.currentUser?.employeeid;
 
+      // Include reportType in the API URL
       final response = await http
           .get(
-        Uri.parse(_appointmentsEndpoint),
+        Uri.parse('$_appointmentsEndpoint?employeeid=$employeeid&reportType=${widget.reportType}'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $authToken',
@@ -332,7 +337,7 @@ class _AppointmentListPageState extends State<AppointmentListPage> {
         textInputAction: TextInputAction.search,
       ),
     )
-        : const Text('Appointments');
+        : Text('Appointments (Type: ${widget.reportType})');
   }
 
   Widget _buildErrorState() {
@@ -459,24 +464,6 @@ class _AppointmentListPageState extends State<AppointmentListPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Align(
-              //   alignment: Alignment.topRight,
-              //   child: Chip(
-              //     label: Text(
-              //       appointment.type?.toUpperCase() ?? 'UNKNOWN',
-              //       style: TextStyle(
-              //         color: appointment.type == 'physical'
-              //             ? Colors.green[800]
-              //             : Colors.blue[800],
-              //         fontWeight: FontWeight.bold,
-              //       ),
-              //     ),
-              //     backgroundColor: appointment.type == 'physical'
-              //         ? Colors.green[100]
-              //         : Colors.blue[100],
-              //     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              //   ),
-              // ),
               const SizedBox(height: 8),
               Semantics(
                 label: 'Appointment name: ${appointment.facility?.name ?? appointment.person?.name ?? "Unknown"}',

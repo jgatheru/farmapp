@@ -3,6 +3,7 @@ import 'package:farmapp/com/wisedigits/crm/appointments/addAppointment.dart';
 import 'package:farmapp/com/wisedigits/crm/appointments/appointmentReport.dart';
 import 'package:farmapp/com/wisedigits/crm/appointments/appointmentReportBySpeciliality.dart';
 import 'package:farmapp/com/wisedigits/crm/appointments/appointments.dart';
+import 'package:farmapp/com/wisedigits/crm/persons/persondetails.dart';
 import 'package:farmapp/com/wisedigits/farm/animalcategory/addAnimalcategory.dart';
 import 'package:farmapp/com/wisedigits/farm/animalcategory/animalcategory.dart';
 import 'package:farmapp/com/wisedigits/farm/deliveries/deliveries.dart';
@@ -66,7 +67,8 @@ class MyApp extends StatelessWidget {
         '/addPerson': (context)=>AddPersonPage(),
         '/viewFacilitys': (context)=>FacilityListPage(),
         '/addFacility': (context)=>AddFacilityPage(),
-        '/viewAppointments': (context)=>AppointmentListPage(),
+        '/viewAppointments': (context)=>AppointmentListPage(0),
+        '/viewCompleteAppointments': (context)=>AppointmentListPage(1),
         '/addAppointment': (context)=>AddAppointmentPage(),
         '/viewAppointmentReport': (context) => AppointmentReportPage(),
         '/viewAppointmentReportBySpeciality': (context) => SpecialityReportPage(),

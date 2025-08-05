@@ -116,12 +116,14 @@ class _SpecialityReportPageState extends State<SpecialityReportPage> {
 
     try {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
+      final employeeid = sessionProvider.currentUser?.employeeid;
       final queryParams = {
         if (selectedFacility != null) 'facilityid': selectedFacility.id.toString(),
         if (selectedPerson != null) 'personid': selectedPerson.id.toString(),
         if (selectedEmployee != null) 'employeeid': selectedEmployee.id.toString(),
         if (fromDate != null) 'fromdate': DateFormat('yyyy-MM-dd').format(fromDate),
         if (toDate != null) 'todate': DateFormat('yyyy-MM-dd').format(toDate),
+        'employeeid': employeeid,
       };
       final uri = Uri.parse('${Config.sisiUrl}/appointments/getSpecialityReport.php')
           .replace(queryParameters: queryParams);
@@ -190,6 +192,10 @@ class _SpecialityReportPageState extends State<SpecialityReportPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isLargeScreen = screenWidth > 600;
+    final textScaleFactor = isLargeScreen ? 1.0 : 0.85;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Speciality Report'),
@@ -219,23 +225,143 @@ class _SpecialityReportPageState extends State<SpecialityReportPage> {
             if (_errorMessage != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.red, fontSize: 16),
+                ),
               ),
             if (_reportData.isNotEmpty)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('Speciality')),
-                    DataColumn(label: Text('Total Allocated')),
-                    DataColumn(label: Text('Total Scheduled')),
-                    DataColumn(label: Text('Attended Today')),
-                    DataColumn(label: Text('Attended This Month')),
-                    DataColumn(label: Text('Attended This Quarter')),
-                    DataColumn(label: Text('Attended This Year')),
-                    DataColumn(label: Text('Not Seen This Month')),
-                    DataColumn(label: Text('Not Seen This Quarter')),
-                    DataColumn(label: Text('Not Seen This Year')),
+                  columnSpacing: isLargeScreen ? 24 : 12,
+                  dataRowMinHeight: 56,
+                  dataRowMaxHeight: 64,
+                  headingRowHeight: 64,
+                  border: TableBorder(
+                    horizontalInside: BorderSide(
+                      color: Colors.grey.shade300,
+                      width: 1,
+                    ),
+                    verticalInside: BorderSide(
+                      color: Colors.grey.shade300,
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  headingRowColor: WidgetStateProperty.all(
+                    (Config.themeColor ?? Colors.teal).withOpacity(0.15),
+                  ),
+                  columns: [
+                    DataColumn(
+                      label: Text(
+                        'Speciality',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Allocated',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Scheduled',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Today',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Month',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Quarter',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Year',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Not Seen Month',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Not Seen Quarter',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Not Seen Year',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Config.themeColor ?? Colors.teal,
+                          fontSize: 16 * textScaleFactor,
+                        ),
+                      ),
+                      numeric: true,
+                    ),
                   ],
                   rows: _reportData.asMap().entries.map((entry) {
                     final index = entry.key;
@@ -248,24 +374,129 @@ class _SpecialityReportPageState extends State<SpecialityReportPage> {
                       },
                       color: WidgetStateProperty.resolveWith((states) {
                         if (_selectedRowIndex == index) {
-                          return Config.themeColor?.withOpacity(0.2) ?? Colors.blueGrey.withOpacity(0.2);
+                          return (Config.themeColor ?? Colors.teal).withOpacity(0.25);
                         }
                         if (states.contains(WidgetState.hovered)) {
-                          return Config.themeColor?.withOpacity(0.1) ?? Colors.blueGrey.withOpacity(0.1);
+                          return (Config.themeColor ?? Colors.teal).withOpacity(0.1);
                         }
-                        return null;
+                        return index % 2 == 0
+                            ? Colors.white
+                            : (Config.backgroundColor ?? Colors.blueGrey).withOpacity(0.05);
                       }),
                       cells: [
-                        DataCell(Text(data['speciality'] ?? 'Unknown')),
-                        DataCell(Text(data['total_allocated'].toString())),
-                        DataCell(Text(data['total_scheduled'].toString())),
-                        DataCell(Text(data['attended_today'].toString())),
-                        DataCell(Text(data['attended_this_month'].toString())),
-                        DataCell(Text(data['attended_this_quarter'].toString())),
-                        DataCell(Text(data['attended_this_year'].toString())),
-                        DataCell(Text(data['not_seen_this_month'].toString())),
-                        DataCell(Text(data['not_seen_this_quarter'].toString())),
-                        DataCell(Text(data['not_seen_this_year'].toString())),
+                        DataCell(
+                          Container(
+                            constraints: BoxConstraints(maxWidth: isLargeScreen ? 200 : 150),
+                            child: Text(
+                              data['speciality']?.toString() ?? 'Unknown',
+                              style: TextStyle(
+                                fontSize: 14 * textScaleFactor,
+                                color: Colors.black87,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['total_allocated']?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['total_scheduled']?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['attended_today']?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['attended_this_month']?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['attended_this_quarter']?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['attended_this_year']?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['not_seen_this_month']?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['not_seen_this_quarter']?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
+                        DataCell(
+                          Text(
+                            data['not_seen_this_year']?.toString() ?? '0',
+                            style: TextStyle(
+                              fontSize: 14 * textScaleFactor,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.right,
+                          ),
+                        ),
                       ],
                     );
                   }).toList(),
