@@ -48,7 +48,8 @@ class _HomeState extends State<Home> {
   String? _error;
   String? _chartError;
 
-  final String menuApiEndpoint = '${Config.sisiUrl}/statistics.php';
+  // final String menuApiEndpoint = '${Config.sisiUrl}/statistics.php';
+  final String menuApiEndpoint = '${Config.baseUrl}/statistics/';
   late String monthlyStatsApiEndpoint = '${Config.sisiUrl}/appointments/monthly_stats.php';
 
   @override
