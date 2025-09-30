@@ -19,7 +19,6 @@ class BluetoothScaleService {
   Stream<String> get errorStream => _errorController.stream;
 
   Future<void> startScaleReader(String deviceAddress, {String scaleModel = 'default'}) async {
-    double weight=0.0;
     try {
       await _stopListener();
       await platform.invokeMethod('startScaleReader', {
@@ -27,10 +26,8 @@ class BluetoothScaleService {
         'scaleModel': scaleModel,
       });
 
-
       _weightSubscription = eventChannel.receiveBroadcastStream().listen(
             (event) {
-
           print('Gatheru Received event: $event, type: ${event.runtimeType}');
           try {
             if (event is String && event == "Connected") {
@@ -39,6 +36,7 @@ class BluetoothScaleService {
               return;
             }
 
+            double weight;
             if (event is double) {
               weight = event;
             } else if (event is num) {
@@ -48,7 +46,7 @@ class BluetoothScaleService {
             }
             print('Gatheru Parsed weight: $weight');
             if (!_weightController.isClosed) {
-
+              _weightController.add(weight); // Add weight to the stream immediately
             }
           } catch (e) {
             print('Gatheru Error parsing weight: $e');
@@ -87,7 +85,6 @@ class BluetoothScaleService {
       _isScaleConnected = false;
       rethrow;
     }
-    _weightController.add(weight);
   }
 
   Future<void> stopScaleReader() async {

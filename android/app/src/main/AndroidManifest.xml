@@ -16,8 +16,10 @@
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
 
+    <!--        android:label="Sisi CRM"-->
     <application
-        android:label="Sisi CRM"
+
+        android:label="Wonnie Farm"
         android:icon="@mipmap/ic_launcher"
         tools:ignore="Instantiatable">
         <activity

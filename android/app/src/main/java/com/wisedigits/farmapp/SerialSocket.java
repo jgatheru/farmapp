@@ -7,6 +7,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Build;
 import android.util.Log;
 
 import java.io.IOException;
@@ -24,7 +25,7 @@ class SerialSocket implements Runnable {
 
     private final BroadcastReceiver disconnectBroadcastReceiver;
 
-    private final Context context;
+    private Context context;
     private SerialListener listener;
     private final BluetoothDevice device;
     private BluetoothSocket socket;
@@ -54,23 +55,39 @@ class SerialSocket implements Runnable {
      */
     void connect(SerialListener listener) throws IOException {
         this.listener = listener;
-        context.registerReceiver(disconnectBroadcastReceiver, new IntentFilter(Constants.INTENT_ACTION_DISCONNECT));
+        IntentFilter filter = new IntentFilter(Constants.INTENT_ACTION_DISCONNECT);
+        // Fix for Android 13+: Use RECEIVER_NOT_EXPORTED
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(disconnectBroadcastReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            context.registerReceiver(disconnectBroadcastReceiver, filter);
+        }
         Executors.newSingleThreadExecutor().submit(this);
     }
 
     void disconnect() {
-        listener = null; // ignore remaining data and errors
-        // connected = false; // run loop will reset connected
+        Log.d("SerialSocket", "Disconnecting");
+        connected = false; // Stop the run loop
+        listener = null; // Ignore remaining data and errors
         if (socket != null) {
             try {
+                socket.getInputStream().close();
+                socket.getOutputStream().close();
                 socket.close();
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                Log.e("SerialSocket", "Error closing socket: " + e.getMessage(), e);
             }
             socket = null;
         }
-        try {
-            context.unregisterReceiver(disconnectBroadcastReceiver);
-        } catch (Exception ignored) {
+        if (context != null) {
+            try {
+                context.unregisterReceiver(disconnectBroadcastReceiver);
+            } catch (IllegalArgumentException e) {
+                Log.e("SerialSocket", "Receiver not registered: " + e.getMessage());
+            } catch (Exception e) {
+                Log.e("SerialSocket", "Error unregistering receiver: " + e.getMessage(), e);
+            }
+            context = null;
         }
     }
 
@@ -110,6 +127,7 @@ class SerialSocket implements Runnable {
                 len = socket.getInputStream().read(buffer);
 
                 byte[] data = new byte[len];
+
                 System.arraycopy(buffer, 0, data, 0, len);
 
                 // Compare the current data with the previous data

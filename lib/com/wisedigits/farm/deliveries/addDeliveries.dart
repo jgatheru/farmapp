@@ -1,12 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../config.dart';
 import '../../auth/SessionProvider.dart';
+import '../production/BluetoothScaleService.dart';
 import 'deliveries.dart'; // Ensure this file contains the Delivery and CustomerForFilter models
 
 class DeliveryFormPage extends StatefulWidget {
@@ -35,6 +40,15 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
   String? _customerFetchError;
   String? _sessionFetchError;
   bool _isSaving = false;
+  String _bluetoothStatus = 'Not connected';
+  bool _isReadingBluetooth = false;
+  StreamSubscription<double>? _weightSubscription;
+  StreamSubscription<String>? _errorSubscription;
+  BluetoothDevice? _connectedDevice;
+  final List<double> _readings = [];
+  double _totalWeight = 0.0;
+  bool _isFirstWeightReceived = false;
+  final _bluetoothService = BluetoothScaleService();
 
   final String _addEndpoint = '${Config.baseUrl}/modules/farm/milk-deliveries/create';
   late String _updateEndpoint = '${Config.baseUrl}/modules/farm/milk-deliveries/';
@@ -46,6 +60,40 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
     super.initState();
     _fetchCustomers();
     _fetchSessions();
+    _weightSubscription = _bluetoothService.weightStream.listen((weight) {
+      if (!mounted) {
+        print('Gatheru Widget not mounted, ignoring weight event');
+        return;
+      }
+      setState(() {
+        if (!_isFirstWeightReceived) {
+          _quantityController.text = weight.toStringAsFixed(2);
+          _isFirstWeightReceived = true;
+        }
+        _quantityController.text = weight.toStringAsFixed(2);
+        _bluetoothStatus = 'Weight: ${weight.toStringAsFixed(2)} kg';
+        _isReadingBluetooth = false;
+        print('Gatheru: Received weight: $weight, First weight received: $_isFirstWeightReceived');
+      });
+    });
+    _errorSubscription = _bluetoothService.errorStream.listen((error) {
+      if (!mounted) {
+        print('Gatheru Widget not mounted, ignoring error event');
+        return;
+      }
+      setState(() {
+        _bluetoothStatus = 'Error: $error';
+        _isReadingBluetooth = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.contains('ScaleReader is not initialized')
+              ? 'Scale not initialized. Please try again.'
+              : 'Bluetooth error: $error'),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    });
     if (widget.delivery != null) {
       // Edit mode: Populate fields with delivery data
       _customerController.text = widget.delivery!.crmCustomerId.toString();
@@ -68,6 +116,200 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
     _quantityController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkBluetoothPermissions() async {
+    try {
+      if (Platform.isAndroid) {
+        Map<Permission, PermissionStatus> statuses = await [
+          Permission.bluetoothScan,
+          Permission.bluetoothConnect,
+        ].request();
+        if (!statuses[Permission.bluetoothScan]!.isGranted ||
+            !statuses[Permission.bluetoothConnect]!.isGranted) {
+          print('Gatheru Bluetooth permissions denied');
+          setState(() {
+            _bluetoothStatus = 'Permissions denied';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please grant Bluetooth permissions')),
+          );
+          return;
+        }
+      }
+      bool isBluetoothEnabled = await _bluetoothService.isBluetoothEnabled();
+      print('Gatheru Bluetooth enabled: $isBluetoothEnabled');
+      if (!isBluetoothEnabled) {
+        setState(() {
+          _bluetoothStatus = 'Please enable Bluetooth';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enable Bluetooth in settings')),
+        );
+        return;
+      }
+      setState(() {
+        _bluetoothStatus = 'Ready to scan';
+      });
+    } catch (e) {
+      print('Gatheru Error checking Bluetooth permissions: $e');
+      setState(() {
+        _bluetoothStatus = 'Error checking Bluetooth: $e';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Bluetooth error: $e')),
+      );
+    }
+  }
+
+  Future<void> _selectBluetoothDevice() async {
+    if (_isReadingBluetooth) {
+      print('Gatheru Already reading Bluetooth, ignoring request');
+      return;
+    }
+
+    setState(() {
+      _isReadingBluetooth = true;
+      _bluetoothStatus = 'Checking Bluetooth...';
+      _isFirstWeightReceived = false; // Reset to allow new first reading
+    });
+
+    try {
+      if (Platform.isAndroid) {
+        Map<Permission, PermissionStatus> statuses = await [
+          Permission.bluetoothScan,
+          Permission.bluetoothConnect,
+        ].request();
+        if (!statuses[Permission.bluetoothScan]!.isGranted ||
+            !statuses[Permission.bluetoothConnect]!.isGranted) {
+          print('Gatheru Bluetooth permissions denied');
+          setState(() {
+            _isReadingBluetooth = false;
+            _bluetoothStatus = 'Permissions denied';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please grant Bluetooth permissions')),
+          );
+          return;
+        }
+      }
+
+      bool isBluetoothEnabled = await _bluetoothService.isBluetoothEnabled();
+      print('Gatheru Bluetooth enabled: $isBluetoothEnabled');
+      if (!isBluetoothEnabled) {
+        setState(() {
+          _isReadingBluetooth = false;
+          _bluetoothStatus = 'Please enable Bluetooth';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enable Bluetooth in settings')),
+        );
+        return;
+      }
+
+      final List<Map<String, dynamic>> deviceList = await _bluetoothService.getPairedDevices();
+      if (deviceList.isEmpty) {
+        setState(() {
+          _isReadingBluetooth = false;
+          _bluetoothStatus = 'No paired devices found';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No paired devices found. Please pair the scale in Bluetooth settings.'),
+            duration: Duration(seconds: 6),
+          ),
+        );
+        return;
+      }
+
+      final Map<String, dynamic>? selectedDevice = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Select Paired Bluetooth Device'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: ListView.builder(
+              itemCount: deviceList.length,
+              itemBuilder: (context, index) {
+                final device = deviceList[index];
+                final name = device['name'] ?? 'Unknown';
+                final address = device['address'];
+                final type = device['type'];
+                final model = device['model'] ?? 'default';
+                return ListTile(
+                  title: Text(name),
+                  subtitle: Text('MAC: $address, Type: $type, Model: $model'),
+                  onTap: () => Navigator.pop(context, device),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+
+      if (selectedDevice == null) {
+        setState(() {
+          _isReadingBluetooth = false;
+          _bluetoothStatus = 'No device selected';
+        });
+        return;
+      }
+
+      final String deviceAddress = selectedDevice['address'];
+      final String deviceName = selectedDevice['name'] ?? deviceAddress;
+      final String scaleModel = selectedDevice['model'] ?? 'default';
+      print('Gatheru Selected device: $deviceName, address: $deviceAddress, model: $scaleModel');
+      setState(() {
+        _bluetoothStatus = 'Connecting to $deviceName...';
+      });
+
+      try {
+        await _bluetoothService.startScaleReader(deviceAddress, scaleModel: scaleModel).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('Timeout connecting to Bluetooth scale');
+          },
+        );
+        setState(() {
+          _bluetoothStatus = 'Reading weight... Step on the scale';
+        });
+
+        await _bluetoothService.weightStream.first.timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {
+            throw Exception('No weight received from scale within 30 seconds');
+          },
+        );
+      } catch (e) {
+        setState(() {
+          _isReadingBluetooth = false;
+          _bluetoothStatus = 'Error: $e';
+        });
+        String errorMessage = e.toString();
+        if (errorMessage.contains('Connection error')) {
+          errorMessage = 'Failed to connect to scale. Ensure it is powered on and in range.';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage), duration: const Duration(seconds: 6)),
+        );
+      }
+    } catch (e) {
+      print('Gatheru Error in selectBluetoothDevice: $e');
+      setState(() {
+        _isReadingBluetooth = false;
+        _bluetoothStatus = 'Error: $e';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), duration: const Duration(seconds: 6)),
+      );
+    }
   }
 
   Future<void> _fetchCustomers() async {
@@ -174,6 +416,25 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
     }
   }
 
+  void _addReading() {
+    final value = _quantityController.text;
+    if (value.isNotEmpty && double.tryParse(value) != null && double.parse(value) > 0) {
+      setState(() {
+        final weight = double.parse(value);
+        _readings.add(weight);
+        _totalWeight = _readings.fold(0.0, (sum, item) => sum + item);
+        _quantityController.clear();
+        _bluetoothStatus = 'Ready to scan';
+        _isFirstWeightReceived = false; // Allow new first reading after adding
+        print('Gatheru: Added reading: $weight, Total weight: $_totalWeight, Readings: $_readings');
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid positive number')),
+      );
+    }
+  }
+
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -222,7 +483,7 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
           'crm_customer_id': _selectedCustomerId,
           'farm_session_id': _selectedSessionId,
           'date': DateFormat('yyyy-MM-dd').format(_selectedDeliveryDate),
-          'quantity': double.parse(_quantityController.text),
+          'approved_quantity': double.parse(_totalWeight.toString()),
           'notes': _notesController.text.isEmpty ? null : _notesController.text,
         };
 
@@ -261,21 +522,55 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
 
         if (response.statusCode == 200) {
           final Map<String, dynamic> responseData = jsonDecode(response.body);
-          if (responseData['success'] == true) {
+          // if (responseData['success'] == true) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(widget.delivery == null ? 'Delivery added successfully!' : 'Delivery updated successfully!')),
+            );print("We are here!!!");
+            // Clear all fields and reset state after successful save
+            setState(() {
+              _readings.clear();
+              _totalWeight = 0.0;
+              _quantityController.clear();
+              _isFirstWeightReceived = false;
+              _bluetoothStatus = 'Ready to scan';
+              _customerController.clear();
+              _sessionController.clear();
+              _notesController.clear();
+              _selectedCustomerId = null;
+              _selectedSessionId = null;
+              _selectedDeliveryDate = DateTime.now();
+            });
+            // Show confirmation dialog before navigating back
+            bool? navigateBack = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Success'),
+                content: const Text('Delivery saved successfully. Do you want to return to the previous screen?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false), // Stay on the form
+                    child: const Text('Stay'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true), // Navigate back
+                    child: const Text('Return'),
+                  ),
+                ],
+              ),
             );
-            Navigator.pop(context, true);
+            if (navigateBack == true) {
+              Navigator.pop(context, true);
+            }
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(responseData['message'] ?? 'Failed to ${widget.delivery == null ? 'add' : 'update'} delivery')),
+              SnackBar(content: Text('Failed to ${widget.delivery == null ? 'add' : 'update'} delivery')),
             );
           }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Server error: ${response.statusCode}')),
-          );
-        }
+        // } else {
+        //   ScaffoldMessenger.of(context).showSnackBar(
+        //     SnackBar(content: Text('Server error: ${response.statusCode}')),
+        //   );
+        // }
       } catch (e) {
         if (!mounted) return;
         setState(() {
@@ -442,22 +737,166 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _quantityController,
-                decoration: const InputDecoration(
-                  labelText: 'Quantity',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.scale),
+                decoration: InputDecoration(
+                  labelText: 'Quantity (Kg)',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.scale),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_isReadingBluetooth)
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        IconButton(
+                          icon: const Icon(Icons.bluetooth),
+                          onPressed: _selectBluetoothDevice,
+                        ),
+                    ],
+                  ),
                 ),
+                readOnly: true,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter quantity';
-                  }
-                  if (double.tryParse(value) == null) {
-                    return 'Please enter a valid number';
+                  if (_totalWeight == 0.0) {
+                    return 'Please add at least one valid reading';
                   }
                   return null;
                 },
               ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: Text(
+                  'Bluetooth Status: $_bluetoothStatus',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _bluetoothStatus.contains('Error') ||
+                        _bluetoothStatus.contains('failed') ||
+                        _bluetoothStatus.contains('No scales')
+                        ? Colors.red
+                        : Colors.grey,
+                  ),
+                ),
+              ),
+              if (_bluetoothStatus.contains('Error') || _bluetoothStatus.contains('No scales'))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: ElevatedButton(
+                    onPressed: _selectBluetoothDevice,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Config.themeColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('Retry Bluetooth Scan'),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: ElevatedButton(
+                  onPressed: _addReading,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Config.themeColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Add Reading'),
+                ),
+              ),
+              if (_readings.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Text(
+                    'Total Weight: ${_totalWeight.toStringAsFixed(2)} Kg',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8.0),
+                        color: Colors.grey[200],
+                        child: Row(
+                          children: const [
+                            Expanded(
+                              flex: 1,
+                              child: Text(
+                                'Reading #',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                'Weight (Kg)',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        height: 150,
+                        child: ListView.builder(
+                          itemCount: _readings.length,
+                          itemBuilder: (context, index) {
+                            return Container(
+                              padding: const EdgeInsets.all(8.0),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(color: Colors.grey.shade300),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 1,
+                                    child: Text('Reading ${index + 1}'),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      _readings[index].toStringAsFixed(2),
+                                      textAlign: TextAlign.right,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Padding(
+                //   padding: const EdgeInsets.symmetric(vertical: 8.0),
+                //   child: ElevatedButton(
+                //     onPressed: _saveTotal,
+                //     style: ElevatedButton.styleFrom(
+                //       backgroundColor: Config.themeColor,
+                //       foregroundColor: Colors.white,
+                //       shape: RoundedRectangleBorder(
+                //         borderRadius: BorderRadius.circular(8),
+                //       ),
+                //     ),
+                //     child: const Text('Save Total'),
+                //   ),
+                // ),
+              ],
               const SizedBox(height: 16),
               InputDecorator(
                 decoration: InputDecoration(

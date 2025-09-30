@@ -180,15 +180,19 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
   double _totalAM = 0.0;
   double _amDeliveryQty = 0.0;
+  double _amFromFarmQty = 0.0;
 
   double _totalPM = 0.0;
   double _pmDeliveryQty = 0.0;
+  double _pmFromFarmQty = 0.0;
 
   double _totalEvening = 0.0;
   double _pm2DeliveryQty = 0.0;
+  double _pm2FromFarmQty = 0.0;
 
   double _totalQuantity = 0.0;
   double _totalDeliveredQuantity = 0.0;
+  double _totalFromFarmQuantity = 0.0;
 
 
   @override
@@ -402,9 +406,18 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
           _amDeliveryQty = _deliveryRecords.fold(0.0, (sum, record) => sum + record.amQuantity);
           _pmDeliveryQty = _deliveryRecords.fold(0.0, (sum, record) => sum + record.pmQuantity);
           _pm2DeliveryQty = _deliveryRecords.fold(0.0, (sum, record) => sum + record.pm2Quantity);
+
+          _amFromFarmQty = _deliveryRecords.fold(0.0, (sum, record) => sum + record.amAQuantity);
+          _pmFromFarmQty = _deliveryRecords.fold(0.0, (sum, record) => sum + record.pmAQuantity);
+          _pm2FromFarmQty = _deliveryRecords.fold(0.0, (sum, record) => sum + record.pm2AQuantity);
+
           _totalDeliveredQuantity = _deliveryRecords.fold(
             0.0,
                 (sum, record) => sum + record.amQuantity + record.pmQuantity + record.pm2Quantity,
+          );
+          _totalFromFarmQuantity = _deliveryRecords.fold(
+            0.0,
+                (sum, record) => sum + record.amAQuantity + record.pmAQuantity + record.pm2AQuantity,
           );
 
         });
@@ -792,7 +805,7 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                              _totalAM.toStringAsFixed(2),
+                              _totalAM.toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
 
@@ -810,7 +823,7 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                              _totalPM.toStringAsFixed(2),
+                              _totalPM.toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
 
@@ -828,7 +841,7 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                              _totalEvening.toStringAsFixed(2),
+                              _totalEvening.toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
 
@@ -846,9 +859,105 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                              _totalQuantity.toStringAsFixed(2),
+                              _totalQuantity.toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+
+                            ),
+
+                          ),
+
+                        ),
+
+                      ],
+
+                    ),
+
+                    DataRow(
+
+                      color: WidgetStateProperty.resolveWith((states) => Config.themeColor.withOpacity(0.05)),
+
+                      cells: <DataCell>[
+
+                        const DataCell(Text('')),
+
+                        DataCell(
+
+                          Text(
+
+                            'From Farm',
+
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+
+                          ),
+
+                        ),
+
+                        DataCell(
+
+                          Align(
+
+                            alignment: Alignment.centerRight,
+
+                            child: Text(
+
+                              _amFromFarmQty.toStringAsFixed(1),
+
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+
+                            ),
+
+                          ),
+
+                        ),
+
+                        DataCell(
+
+                          Align(
+
+                            alignment: Alignment.centerRight,
+
+                            child: Text(
+
+                              _pmFromFarmQty.toStringAsFixed(1),
+
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+
+                            ),
+
+                          ),
+
+                        ),
+
+                        DataCell(
+
+                          Align(
+
+                            alignment: Alignment.centerRight,
+
+                            child: Text(
+
+                              _pm2FromFarmQty.toStringAsFixed(1),
+
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+
+                            ),
+
+                          ),
+
+                        ),
+
+                        DataCell(
+
+                          Align(
+
+                            alignment: Alignment.centerRight,
+
+                            child: Text(
+
+                              _totalFromFarmQuantity.toStringAsFixed(1),
+
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
 
                             ),
 
@@ -888,7 +997,7 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                              _amDeliveryQty.toStringAsFixed(2),
+                              _amDeliveryQty.toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Config.themeColor),
 
@@ -906,7 +1015,7 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                              _pmDeliveryQty.toStringAsFixed(2),
+                              _pmDeliveryQty.toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Config.themeColor),
 
@@ -924,7 +1033,7 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                              _pm2DeliveryQty.toStringAsFixed(2),
+                              _pm2DeliveryQty.toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Config.themeColor),
 
@@ -942,7 +1051,7 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                              _totalDeliveredQuantity.toStringAsFixed(2),
+                              _totalDeliveredQuantity.toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Config.themeColor),
 
@@ -983,7 +1092,7 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                              (_totalAM-_amDeliveryQty).toStringAsFixed(2),
+                              (_totalAM-_amDeliveryQty).toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent),
 
@@ -1001,7 +1110,7 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                              (_totalPM-_pmDeliveryQty).toStringAsFixed(2),
+                              (_totalPM-_pmDeliveryQty).toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent),
 
@@ -1019,7 +1128,7 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                                (_totalEvening-_pm2DeliveryQty).toStringAsFixed(2),
+                                (_totalEvening-_pm2DeliveryQty).toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent),
 
@@ -1037,7 +1146,7 @@ class _MilkProductionRecordsPageState extends State<MilkProductionRecordsPage> {
 
                             child: Text(
 
-                                (_totalQuantity-_totalDeliveredQuantity).toStringAsFixed(2),
+                                (_totalQuantity-_totalDeliveredQuantity).toStringAsFixed(1),
 
                               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent),
 

@@ -51,7 +51,6 @@ class _AppointmentDetailsPageState extends State<AppointmentDetailsPage> {
 
       // Construct query parameters using the passed appointment's fields
       final queryParameters = {
-
         'lastAppointment': "1",
         'appointmentId': widget.appointment.appointmentId.toString(),
         // Add additional parameters if available
@@ -164,7 +163,7 @@ class _AppointmentDetailsPageState extends State<AppointmentDetailsPage> {
   Widget build(BuildContext context) {
     // Use fetched data if available, otherwise fallback to widget.appointment
     final displayAppointment = _fetchedAppointment ?? widget.appointment;
-    final displayLastAppointment = widget.appointment;
+    final displayLastAppointment = _fetchedLastAppointment ?? widget.lastAppointment ?? widget.appointment;
 
     return Scaffold(
       appBar: AppBar(
@@ -174,30 +173,6 @@ class _AppointmentDetailsPageState extends State<AppointmentDetailsPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
-          ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 80, color: Colors.red[300]),
-            const SizedBox(height: 16),
-            Text(
-              _errorMessage!,
-              style: const TextStyle(color: Colors.red, fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _fetchAppointmentDetails,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Config.themeColor,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      )
           : Padding(
         padding: const EdgeInsets.all(16.0),
         child: SingleChildScrollView(
@@ -205,133 +180,159 @@ class _AppointmentDetailsPageState extends State<AppointmentDetailsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Name: ',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    TextSpan(
-                      text: displayAppointment.facility?.name ?? displayAppointment.person?.name ?? "Unknown",
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ],
+              if (_errorMessage != null) ...[
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline, size: 80, color: Colors.red[300]),
+                      const SizedBox(height: 16),
+                      Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Colors.red, fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: _fetchAppointmentDetails,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Config.themeColor,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Date: ',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    TextSpan(
-                      text: displayAppointment.appointmentDate ?? "N/A",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
+              ] else ...[
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Name: ',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(
+                        text: displayAppointment.facility?.name ?? displayAppointment.person?.name ?? "Unknown",
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Type: ',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    TextSpan(
-                      text: displayAppointment.type ?? "N/A",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
+                const SizedBox(height: 8),
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Date: ',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(
+                        text: displayAppointment.appointmentDate ?? "N/A",
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Location: ',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    TextSpan(
-                      text: displayAppointment.location ?? "N/A",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Type: ',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(
+                        text: displayAppointment.type ?? "N/A",
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Action: ',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    TextSpan(
-                      text: displayAppointment.action ?? "N/A",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Location: ',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(
+                        text: displayAppointment.location ?? "N/A",
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Reaction: ',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    TextSpan(
-                      text: displayAppointment.reaction ?? "N/A",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Action: ',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(
+                        text: displayAppointment.action ?? "N/A",
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Rating: ',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    TextSpan(
-                      text: displayAppointment.ratingId != null ? ["Firm", "Commitment", "No"][displayAppointment.ratingId! - 1] : "N/A",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Reaction: ',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(
+                        text: displayAppointment.reaction ?? "N/A",
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Follow-up: ',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    TextSpan(
-                      text: displayAppointment.followup ?? "N/A",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Rating: ',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(
+                        text: displayAppointment.ratingId != null ? ["Firm", "Commitment", "No"][displayAppointment.ratingId! - 1] : "N/A",
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Products: ',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    TextSpan(
-                      text: displayAppointment.products ?? "N/A",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Follow-up: ',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(
+                        text: displayAppointment.followup ?? "N/A",
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Products: ',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(
+                        text: displayAppointment.products ?? "N/A",
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () {
@@ -351,7 +352,7 @@ class _AppointmentDetailsPageState extends State<AppointmentDetailsPage> {
             ],
           ),
         ),
-      )
+      ),
     );
   }
 }

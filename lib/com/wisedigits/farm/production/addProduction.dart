@@ -46,6 +46,9 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
   StreamSubscription<double>? _weightSubscription;
   StreamSubscription<String>? _errorSubscription;
   final _bluetoothService = BluetoothScaleService();
+  final List<double> _readings = [];
+  double _totalWeight = 0.0;
+  bool _isFirstWeightReceived = false;
 
   final String _addEndpoint = '${Config.baseUrl}/modules/farm/milk-production/create';
   late String _updateEndpoint = '${Config.baseUrl}/modules/farm/milk-production/';
@@ -64,9 +67,14 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
         return;
       }
       setState(() {
+        if (!_isFirstWeightReceived) {
+          _quantityController.text = weight.toStringAsFixed(2);
+          _isFirstWeightReceived = true;
+        }
         _quantityController.text = weight.toStringAsFixed(2);
         _bluetoothStatus = 'Weight: ${weight.toStringAsFixed(2)} kg';
         _isReadingBluetooth = false;
+        print('Gatheru: Received weight: $weight, First weight received: $_isFirstWeightReceived');
       });
     });
     _errorSubscription = _bluetoothService.errorStream.listen((error) {
@@ -155,6 +163,7 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
     setState(() {
       _isReadingBluetooth = true;
       _bluetoothStatus = 'Checking Bluetooth...';
+      _isFirstWeightReceived = false; // Reset to allow new first reading
     });
 
     try {
@@ -431,11 +440,51 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
     }
   }
 
+  void _addReading() {
+    final value = _quantityController.text;
+    if (value.isNotEmpty && double.tryParse(value) != null && double.parse(value) > 0) {
+      setState(() {
+        final weight = double.parse(value);
+        _readings.add(weight);
+        _totalWeight = _readings.fold(0.0, (sum, item) => sum + item);
+        _quantityController.clear();
+        _bluetoothStatus = 'Ready to scan';
+        _isFirstWeightReceived = false; // Allow new first reading after adding
+        print('Gatheru: Added reading: $weight, Total weight: $_totalWeight, Readings: $_readings');
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid positive number')),
+      );
+    }
+  }
+
+  void _saveTotal() {
+    if (_totalWeight > 0) {
+      setState(() {
+        _quantityController.text = _totalWeight.toStringAsFixed(2);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Total weight saved: ${_totalWeight.toStringAsFixed(2)} Kg')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No readings to save')),
+      );
+    }
+  }
+
   Future<void> _submitForm() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedAnimalId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please select a valid animal')),
+        );
+        return;
+      }
+      if (_totalWeight == 0.0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please add at least one valid reading')),
         );
         return;
       }
@@ -448,7 +497,7 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
         final Map<String, dynamic> recordData = {
           'farm_animal_id': _selectedAnimalId,
           'date': DateFormat('yyyy-MM-dd').format(_selectedProductionDate),
-          'quantity': double.parse(_quantityController.text),
+          'quantity': _totalWeight,
           'quality_grade': _selectedQualityGrade?.toLowerCase(),
           'notes': _notesController.text.isEmpty ? null : _notesController.text,
           'farm_session_id': _selectedSessionId,
@@ -466,7 +515,7 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
           throw Exception('User not authenticated');
         }
 
-        print(jsonEncode(recordData));
+        print('Gatheru: Submitting record: ${jsonEncode(recordData)}');
         final response = await http.post(
           Uri.parse(widget.record == null ? _addEndpoint : _updateEndpoint),
           headers: {
@@ -483,19 +532,26 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
           _isSaving = false;
         });
 
-        print(response.body);
+        print('Gatheru: Response: ${response.body}');
         if (response.statusCode == 200) {
-          final Map<String, dynamic> responseData = jsonDecode(response.body);
-          if (responseData['success'] == true) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(widget.record == null ? 'Record added successfully!' : 'Record updated successfully!')),
-            );
-            Navigator.pop(context, true);
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(responseData['message'] ?? 'Failed to ${widget.record == null ? 'add' : 'update'} record')),
-            );
-          }
+          // Clear form elements immediately after successful save
+          setState(() {
+            _readings.clear();
+            _totalWeight = 0.0;
+            _quantityController.clear();
+            _notesController.clear();
+            _selectedAnimalId = null;
+            _selectedSessionId = null;
+            _selectedQualityGrade = null;
+            _selectedProductionDate = DateTime.now();
+            _bluetoothStatus = 'Ready to scan';
+            _isFirstWeightReceived = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(widget.record == null ? 'Record added successfully!' : 'Record updated successfully!')),
+          );
+          // Navigator.pop(context, true);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Server error: ${response.statusCode}')),
@@ -509,7 +565,7 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
-        print('Error ${widget.record == null ? 'adding' : 'updating'} milk record: $e');
+        print('Gatheru: Error ${widget.record == null ? 'adding' : 'updating'} milk record: $e');
       }
     }
   }
@@ -750,14 +806,11 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
                     ],
                   ),
                 ),
-                readOnly: true,
+                readOnly: false,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter quantity';
-                  }
-                  if (double.tryParse(value) == null || double.parse(value) <= 0) {
-                    return 'Please enter a valid positive number';
+                  if (_totalWeight == 0.0) {
+                    return 'Please add at least one valid reading';
                   }
                   return null;
                 },
@@ -791,6 +844,107 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
                     child: const Text('Retry Bluetooth Scan'),
                   ),
                 ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: ElevatedButton(
+                  onPressed: _addReading,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Config.themeColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Add Reading'),
+                ),
+              ),
+              if (_readings.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Text(
+                    'Total Weight: ${_totalWeight.toStringAsFixed(2)} Kg',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8.0),
+                        color: Colors.grey[200],
+                        child: Row(
+                          children: const [
+                            Expanded(
+                              flex: 1,
+                              child: Text(
+                                'Reading #',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                'Weight (Kg)',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        height: 150,
+                        child: ListView.builder(
+                          itemCount: _readings.length,
+                          itemBuilder: (context, index) {
+                            return Container(
+                              padding: const EdgeInsets.all(8.0),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(color: Colors.grey.shade300),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 1,
+                                    child: Text('Reading ${index + 1}'),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      _readings[index].toStringAsFixed(2),
+                                      textAlign: TextAlign.right,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Padding(
+                //   padding: const EdgeInsets.symmetric(vertical: 8.0),
+                //   child: ElevatedButton(
+                //     onPressed: _saveTotal,
+                //     style: ElevatedButton.styleFrom(
+                //       backgroundColor: Config.themeColor,
+                //       foregroundColor: Colors.white,
+                //       shape: RoundedRectangleBorder(
+                //         borderRadius: BorderRadius.circular(8),
+                //       ),
+                //     ),
+                //     child: const Text('Save Total'),
+                //   ),
+                // ),
+              ],
               const SizedBox(height: 16),
               InputDecorator(
                 decoration: InputDecoration(

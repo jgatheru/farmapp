@@ -9,6 +9,8 @@ import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugins.GeneratedPluginRegistrant;
 
 public class MainActivity extends FlutterActivity {
+    private BluetoothScaleReaderPlugin bluetoothPlugin;
+
     @Override
     public void configureFlutterEngine(FlutterEngine flutterEngine) {
         super.configureFlutterEngine(flutterEngine);
@@ -17,5 +19,22 @@ public class MainActivity extends FlutterActivity {
         BinaryMessenger messenger = flutterEngine.getDartExecutor().getBinaryMessenger();
         Context context = getApplicationContext();
         new BluetoothScaleReaderPlugin().registerWith(messenger,context);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (bluetoothPlugin != null) {
+            bluetoothPlugin.onStop();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (bluetoothPlugin != null) {
+            bluetoothPlugin.onDestroy();
+            bluetoothPlugin = null;
+        }
     }
 }

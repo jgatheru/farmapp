@@ -16,6 +16,9 @@ class DeliveryReport {
   final double amQuantity;
   final double pmQuantity;
   final double pm2Quantity;
+  final double amAQuantity;
+  final double pmAQuantity;
+  final double pm2AQuantity;
   final String? notes;
 
   DeliveryReport({
@@ -24,6 +27,9 @@ class DeliveryReport {
     required this.amQuantity,
     required this.pmQuantity,
     required this.pm2Quantity,
+    required this.amAQuantity,
+    required this.pmAQuantity,
+    required this.pm2AQuantity,
     this.notes,
   });
 
@@ -45,6 +51,21 @@ class DeliveryReport {
           ? (json['pm2qty'] is num
           ? (json['pm2qty'] as num).toDouble()
           : double.tryParse(json['pm2qty'].toString()) ?? 0.0)
+          : 0.0,
+      amAQuantity: json['amaqty'] != null
+          ? (json['amaqty'] is num
+          ? (json['amaqty'] as num).toDouble()
+          : double.tryParse(json['amaqty'].toString()) ?? 0.0)
+          : 0.0,
+      pmAQuantity: json['pmaqty'] != null
+          ? (json['pmaqty'] is num
+          ? (json['pmaqty'] as num).toDouble()
+          : double.tryParse(json['pmaqty'].toString()) ?? 0.0)
+          : 0.0,
+      pm2AQuantity: json['pm2aqty'] != null
+          ? (json['pm2aqty'] is num
+          ? (json['pm2aqty'] as num).toDouble()
+          : double.tryParse(json['pm2aqty'].toString()) ?? 0.0)
           : 0.0,
       notes: json['notes'] as String?,
     );

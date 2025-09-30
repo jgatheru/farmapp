@@ -467,8 +467,8 @@ class _HomeState extends State<Home> {
                 children: [
                   _buildDrawerItem(
                     icon: Icons.person,
-                    title: 'Make ORDER',
-                    route: '/viewPersons',
+                    title: 'ORDERS',
+                    route: '/viewOrders',
                   ),
                 ],
               ),

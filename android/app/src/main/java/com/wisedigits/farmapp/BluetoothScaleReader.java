@@ -134,12 +134,12 @@ public class BluetoothScaleReader implements SerialListener {
         }
     }
 
-    @Override
+    @Override 
     public void onSerialRead(ArrayDeque<byte[]> datas) {
         for (byte[] data : datas) {
             float weight = parseWeight(data);
             if (weight >= 0) {
-                Log.d(TAG, "Parsed weight: " + weight);
+                Log.d("Wambui", "Parsed weight: " + weight);
                 mainLooper.post(() -> {
                     if (eventSink != null) {
                         eventSink.success((double) weight);
@@ -166,9 +166,9 @@ public class BluetoothScaleReader implements SerialListener {
         String asciiData;
 
         switch (scaleModel.toLowerCase()) {
-
             case "your_scale_model":
                 asciiData = new String(data).trim();
+                Log.d("Wakarindi", asciiData);
                 if (asciiData.startsWith("=")) {
                     try {
                         String weightStr = asciiData.substring(1).trim();
@@ -187,7 +187,8 @@ public class BluetoothScaleReader implements SerialListener {
                     Log.d(TAG, "Zero weight detected (61 - 48)");
                     return 0f;
                 }
-                int weightInt = ((data[1] & 0xFF) << 8) | (data[0] & 0xFF);
+                // Swap byte order for big-endian
+                int weightInt = ((data[0] & 0xFF) << 8) | (data[1] & 0xFF);
                 float weight = weightInt * 0.005f;
                 if (weight < 0 || weight > 100) {
                     Log.w(TAG, "Weight out of range: " + weight);
@@ -197,21 +198,25 @@ public class BluetoothScaleReader implements SerialListener {
 
             default:
                 asciiData = new String(data).trim();
-                if (asciiData.startsWith("=")) {
+                if (asciiData.startsWith("=") || true) {
                     try {
                         String weightStr = asciiData.substring(1).trim();
+                        Log.d("Gatheru", weightStr);
                         weight = Float.parseFloat(weightStr);
-                        if (weight < 0 || weight > 100) {
-                            Log.w(TAG, "Weight out of range: " + weight);
+                        if (weight < 0) {
+                            Log.w(TAG, "Weight out of range 1: " + weight);
                             return 0f;
                         }
+                        //weight = reverseWeight(weight+"");
+                        weight-=1.4;
                         return weight;
                     } catch (NumberFormatException e) {
                         Log.w(TAG, "Invalid ASCII weight format: " + asciiData);
                     }
                 }
-                weightInt = ((data[1] & 0xFF) << 8) | (data[0] & 0xFF);
-                weight = weightInt * 0.005f;
+                // Swap byte order for big-endian
+                weightInt = ((data[0] & 0xFF) << 8) | (data[1] & 0xFF);
+                weight = weightInt; // Adjust scaling if needed
                 if (weight < 0 || weight > 100) {
                     Log.w(TAG, "Weight out of range: " + weight);
                     return 0f;
@@ -220,11 +225,67 @@ public class BluetoothScaleReader implements SerialListener {
         }
     }
 
-    private String byteArrayToHexString(byte[] data) {
+    private String byteArrayToHexString(byte[] data) {//Log.d("Wambui",data.toString());
         StringBuilder sb = new StringBuilder();
         for (byte b : data) {
             sb.append(String.format("%02X ", b));
         }
         return sb.toString().trim();
+    }
+
+    public static float reverseWeight(String weightStr) {
+        if (weightStr == null || weightStr.isEmpty()) {
+            Log.w(TAG, "Invalid weight string: null or empty");
+            return 0f;
+        }
+
+        // Remove leading/trailing whitespace
+        weightStr = weightStr.trim();
+        Log.d(TAG, "Input weightStr: " + weightStr);
+
+        // Check if the string matches a decimal number format (e.g., "3.22", "3.2200")
+        if (!weightStr.matches("\\d+\\.\\d+")) {
+            Log.w(TAG, "Invalid weight format: " + weightStr);
+            return 0f;
+        }
+
+        try {
+            // Split the string at the decimal point
+            String[] parts = weightStr.split("\\.");
+            if (parts.length != 2) {
+                Log.w(TAG, "Invalid weight format, expected one decimal point: " + weightStr);
+                return 0f;
+            }
+
+            // Strip trailing zeros from the fractional part
+            String fractionalPart = parts[1].replaceAll("0+$", "");
+            // If fractional part is empty, use "0"
+            fractionalPart = fractionalPart.isEmpty() ? "0" : fractionalPart;
+            String cleanedWeightStr = parts[0] + "." + fractionalPart;
+            Log.d(TAG, "Cleaned weightStr: " + cleanedWeightStr);
+
+            // Reverse the integer and fractional parts
+            String reversedStr = fractionalPart + "." + parts[0];
+            // Ensure valid float format (e.g., ".3" -> "0.3")
+            if (reversedStr.startsWith(".")) {
+                reversedStr = "0" + reversedStr;
+            }
+            Log.d(TAG, "Reversed weightStr: " + reversedStr);
+
+            // Parse the reversed string to a float
+            float weight = Float.parseFloat(reversedStr);
+
+            // Validate the output range (0 to 100)
+            if (weight < 0 || weight > 100) {
+                Log.w(TAG, "Reversed weight out of range: " + weight);
+                return 0f;
+            }
+
+            Log.d(TAG, "Final weight: " + weight);
+            return weight;
+        } catch (NumberFormatException e) {
+            Log.w(TAG, "Failed to parse reversed weight: " + weightStr + ", error: " + e.getMessage());
+            return 0f;
+        }
     }
 }

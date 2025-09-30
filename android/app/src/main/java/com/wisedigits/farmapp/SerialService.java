@@ -78,7 +78,7 @@ public class SerialService extends Service implements SerialListener {
 
     @Override
     public void onDestroy() {
-        cancelNotification();
+        Log.d(TAG, "SerialService onDestroy");
         disconnect();
         super.onDestroy();
     }
@@ -95,12 +95,18 @@ public class SerialService extends Service implements SerialListener {
     }
 
     public void disconnect() {
+        Log.d(TAG, "Disconnecting SerialService");
         connected = false;
         cancelNotification();
         if (socket != null) {
-            socket.disconnect();
+            try {
+                socket.disconnect();
+            } catch (Exception e) {
+                Log.e(TAG, "Error disconnecting socket: " + e.getMessage(), e);
+            }
             socket = null;
         }
+        listener = null;
     }
 
     public void write(byte[] data) throws IOException {
@@ -152,8 +158,15 @@ public class SerialService extends Service implements SerialListener {
     }
 
     public void detach() {
-        if (connected) createNotification();
-        listener = null;
+        Log.d(TAG, "Detaching SerialService");
+        if (connected) {
+            createNotification();
+        }
+        synchronized (this) {
+            listener = null;
+        }
+        queue1.clear();
+        queue2.clear();
     }
 
     private void createNotification() {

@@ -55,7 +55,7 @@ class _AddPersonPageState extends State<AddPersonPage> {
   bool _isLoadingSubregions = false;
   bool _isLoadingCategories = false;
 
-  final String _addPersonEndpoint = '${Config.baseUrl}/modules/persons/create';
+  final String _addPersonEndpoint = '${Config.sisiUrl}/persons/create.php';
   final String _updatePersonEndpoint = '${Config.baseUrl}/modules/persons/update';
   final String _fetchTitlesEndpoint = '${Config.sisiUrl}/persons/getTitles.php';
   final String _fetchPositionsEndpoint = '${Config.sisiUrl}/persons/getPositions.php';
@@ -223,7 +223,6 @@ class _AddPersonPageState extends State<AddPersonPage> {
     if (_formKey.currentState!.validate()) {
       if (_selectedTitleId == null ||
           _selectedPositionId == null ||
-          _selectedCadreId == null ||
           _selectedSpecialityId == null ||
           _selectedClasseId == null ||
           _selectedRegionId == null ||
@@ -236,6 +235,10 @@ class _AddPersonPageState extends State<AddPersonPage> {
       setState(() {
         _isLoading = true;
       });
+
+      final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
+      final authToken = sessionProvider.currentUser?.token;
+      final employeeid = sessionProvider.currentUser?.employeeid;
 
       try {
         final Map<String, dynamic> personData = {
@@ -252,13 +255,13 @@ class _AddPersonPageState extends State<AddPersonPage> {
           'location': _locationController.text.isEmpty ? null : _locationController.text,
           'categoryid': _selectedCategoryId,
           'photo_url': _photoUrlController.text.isEmpty ? null : _photoUrlController.text,
+          'employeeid': employeeid,
         };
 
         http.Response response;
         String endpoint;
 
-        final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
-        final authToken = sessionProvider.currentUser?.token;
+
 
         if (_isEditing) {
           personData['id'] = widget.person!.id;
@@ -273,17 +276,19 @@ class _AddPersonPageState extends State<AddPersonPage> {
             body: jsonEncode(personData),
           );
         } else {
-          endpoint = _addPersonEndpoint;
+          endpoint = _addPersonEndpoint;print(endpoint);
           response = await http.post(
             Uri.parse(endpoint),
             headers: {
               'Content-Type': 'application/json; charset=UTF-8',
               'Accept': 'application/json',
-              'Authorization': 'Bearer $authToken',
+              'Authorization': 'Bearer',
             },
             body: jsonEncode(personData),
           );
         }
+
+        print(personData);
 
         if (!mounted) return;
 
@@ -291,6 +296,7 @@ class _AddPersonPageState extends State<AddPersonPage> {
           _isLoading = false;
         });
 
+        print(response.body);
         final Map<String, dynamic> responseData = jsonDecode(response.body);
         _showSnackBar(responseData['message'] ?? 'Operation failed!');
 
@@ -355,12 +361,10 @@ class _AddPersonPageState extends State<AddPersonPage> {
         prefixIcon: Icon(label.contains('Title')
             ? Icons.title
             : label.contains('Position')
-            ? Icons.work
-            : label.contains('Cadre')
             ? Icons.group
             : label.contains('Speciality')
             ? Icons.star
-            : label.contains('Classe')
+            : label.contains('Class')
             ? Icons.class_
             : label.contains('Region')
             ? Icons.location_on
@@ -435,15 +439,15 @@ class _AddPersonPageState extends State<AddPersonPage> {
               const SizedBox(height: 20),
 
               // Cadre Dropdown
-              _buildDropdown(
-                label: 'Cadre',
-                value: _selectedCadreId,
-                items: _cadres,
-                getName: (cadre) => cadre.name,
-                onChanged: (value) => setState(() => _selectedCadreId = value),
-                isLoading: _isLoadingCadres,
-              ),
-              const SizedBox(height: 20),
+              // _buildDropdown(
+              //   label: 'Cadre',
+              //   value: _selectedCadreId,
+              //   items: _cadres,
+              //   getName: (cadre) => cadre.name,
+              //   onChanged: (value) => setState(() => _selectedCadreId = value),
+              //   isLoading: _isLoadingCadres,
+              // ),
+              // const SizedBox(height: 20),
 
               // Speciality Dropdown
               _buildDropdown(
@@ -458,7 +462,7 @@ class _AddPersonPageState extends State<AddPersonPage> {
 
               // Classe Dropdown
               _buildDropdown(
-                label: 'Classe',
+                label: 'Class',
                 value: _selectedClasseId,
                 items: _classes,
                 getName: (classe) => classe.name,

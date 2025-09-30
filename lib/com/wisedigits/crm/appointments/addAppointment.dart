@@ -374,6 +374,9 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
   String? _locationType = 'physical';
   final TextEditingController _actionController = TextEditingController();
   final TextEditingController _reactionController = TextEditingController();
+  final ScrollController _scrollActionController = ScrollController();
+  final ScrollController _scrollReactionController = ScrollController();
+  final ScrollController _scrollFollowupController = ScrollController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _facilityNameController = TextEditingController();
   final TextEditingController _followupController = TextEditingController();
@@ -450,56 +453,91 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
   }
 
   Future<void> _checkLocationPermission() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        setState(() {
-          _errorMessage = 'Location services are disabled. Please enable them.';
-          _locationController.text = widget.appointment.location ?? 'Location unavailable';
-          _isLoading = false;
-        });
-        return;
-      }
+    const Duration retryInterval = Duration(seconds: 5); // Time between retries
+    int attempt = 0;
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
+    while (mounted) {
+      attempt++;
+      print('Location retry attempt #$attempt at ${DateTime.now()}'); // Debug log
+
+      try {
+        // Add timeout to prevent Geolocator from hanging
+        bool serviceEnabled = await Geolocator.isLocationServiceEnabled().timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => throw TimeoutException('Location service check timed out'),
+        );
+        if (!serviceEnabled) {
           setState(() {
-            _errorMessage = 'Location permissions are denied.';
+            _errorMessage = 'Location services are disabled. Retrying in $retryInterval... (Attempt #$attempt)';
             _locationController.text = widget.appointment.location ?? 'Location unavailable';
             _isLoading = false;
           });
+          await Future.delayed(retryInterval);
+          continue; // Retry after delay
+        }
+
+        LocationPermission permission = await Geolocator.checkPermission().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => throw TimeoutException('Permission check timed out'),
+        );
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => throw TimeoutException('Permission request timed out'),
+          );
+          if (permission == LocationPermission.denied) {
+            setState(() {
+              _errorMessage = 'Location permissions are denied. Retrying in $retryInterval... (Attempt #$attempt)';
+              _locationController.text = widget.appointment.location ?? 'Location unavailable';
+              _isLoading = false;
+            });
+            await Future.delayed(retryInterval);
+            continue; // Retry after delay
+          }
+        }
+
+        if (permission == LocationPermission.deniedForever) {
+          setState(() {
+            _errorMessage = 'Location permissions are permanently denied.';
+            _locationController.text = widget.appointment.location ?? 'Location unavailable';
+            _isLoading = false;
+          });
+          print('Permanently denied, stopping retries'); // Debug log
+          return; // Exit if permissions are permanently denied
+        }
+
+        Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        ).timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('Location fetch timed out'),
+        );
+        setState(() {
+          _latitude = position.latitude.toString();
+          _longitude = position.longitude.toString();
+          _isLoading = false; // Stop loading once location is found
+          _errorMessage = null; // Clear error message on success
+        });
+        print('Location fetched: (${position.latitude}, ${position.longitude})'); // Debug log
+
+        await _fetchLandmark(position.latitude, position.longitude);
+        print('Landmark fetched successfully'); // Debug log
+        return; // Exit the loop if location is successfully fetched
+      } catch (e) {
+        if (!mounted) {
+          print('Widget not mounted, stopping retries'); // Debug log
           return;
         }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
         setState(() {
-          _errorMessage = 'Location permissions are permanently denied.';
-          _locationController.text = widget.appointment.location ?? 'Location unavailable';
+          _errorMessage = 'Error getting location: $e. Retrying in $retryInterval... (Attempt #$attempt)';
+          _locationController.text = widget.appointment.location ?? 'Error fetching landmark';
           _isLoading = false;
         });
-        return;
+        print('Error in attempt #$attempt: $e'); // Debug log
+        await Future.delayed(retryInterval);
       }
-
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      setState(() {
-        _latitude = position.latitude.toString();
-        _longitude = position.longitude.toString();
-      });
-
-      await _fetchLandmark(position.latitude, position.longitude);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = 'Error getting location: $e';
-        _locationController.text = widget.appointment.location ?? 'Error fetching landmark';
-        _isLoading = false;
-      });
     }
+    print('Widget disposed, stopping retries'); // Debug log
   }
 
   Future<void> _fetchLandmark(double latitude, double longitude) async {
@@ -680,10 +718,13 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
               SizedBox(
                 height: 120,
                 child: RawScrollbar(
+                  controller: _scrollActionController, // Attach the ScrollController
                   thumbColor: Config.themeColor ?? Colors.blue,
                   radius: const Radius.circular(8),
-                  thickness: 4,
+                  thickness: 8, // Thicker scrollbar
+                  thumbVisibility: true, // Always show scrollbar when content overflows
                   child: SingleChildScrollView(
+                    controller: _scrollActionController, // Attach the same ScrollController to SingleChildScrollView
                     child: TextFormField(
                       controller: _actionController,
                       decoration: InputDecoration(
@@ -731,10 +772,13 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
               SizedBox(
                 height: 120,
                 child: RawScrollbar(
+                  controller: _scrollReactionController, // Attach the ScrollController
                   thumbColor: Config.themeColor ?? Colors.blue,
                   radius: const Radius.circular(8),
-                  thickness: 4,
+                  thickness: 8, // Thicker scrollbar
+                  thumbVisibility: true, // Always show scrollbar when content overflows
                   child: SingleChildScrollView(
+                    controller: _scrollReactionController, // Attach the same ScrollController to SingleChildScrollView
                     child: TextFormField(
                       controller: _reactionController,
                       decoration: InputDecoration(
@@ -755,10 +799,13 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
               SizedBox(
                 height: 120,
                 child: RawScrollbar(
+                  controller: _scrollFollowupController, // Attach the ScrollController
                   thumbColor: Config.themeColor ?? Colors.blue,
                   radius: const Radius.circular(8),
-                  thickness: 4,
+                  thickness: 8, // Thicker scrollbar
+                  thumbVisibility: true, // Always show scrollbar when content overflows
                   child: SingleChildScrollView(
+                    controller: _scrollFollowupController, // Attach the same ScrollController to SingleChildScrollView
                     child: TextFormField(
                       controller: _followupController,
                       decoration: InputDecoration(

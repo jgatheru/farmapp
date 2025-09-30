@@ -11,6 +11,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import '../../../../config.dart';
 import '../../auth/SessionProvider.dart';
+import '../production/BluetoothScaleService.dart';
 import 'feeding.dart';
 
 class InventoryItem {
@@ -75,8 +76,13 @@ class _FeedingFormPageState extends State<FeedingFormPage> {
   bool _isSaving = false;
   String _bluetoothStatus = 'Not connected';
   bool _isReadingBluetooth = false;
-  StreamSubscription<List<int>>? _weightSubscription;
+  StreamSubscription<double>? _weightSubscription;
+  StreamSubscription<String>? _errorSubscription;
   BluetoothDevice? _connectedDevice;
+  final List<double> _readings = [];
+  double _totalWeight = 0.0;
+  bool _isFirstWeightReceived = false;
+  final _bluetoothService = BluetoothScaleService();
 
   final String _addEndpoint = '${Config.baseUrl}/modules/farm/feedings/create';
   late String _updateEndpoint = '${Config.baseUrl}/modules/farm/feedings/';
@@ -92,6 +98,40 @@ class _FeedingFormPageState extends State<FeedingFormPage> {
     _fetchShades();
     _fetchInventoryItems();
     _checkBluetoothPermissions();
+    _weightSubscription = _bluetoothService.weightStream.listen((weight) {
+      if (!mounted) {
+        print('Gatheru Widget not mounted, ignoring weight event');
+        return;
+      }
+      setState(() {
+        if (!_isFirstWeightReceived) {
+          _quantityController.text = weight.toStringAsFixed(2);
+          _isFirstWeightReceived = true;
+        }
+        _quantityController.text = weight.toStringAsFixed(2);
+        _bluetoothStatus = 'Weight: ${weight.toStringAsFixed(2)} kg';
+        _isReadingBluetooth = false;
+        print('Gatheru: Received weight: $weight, First weight received: $_isFirstWeightReceived');
+      });
+    });
+    _errorSubscription = _bluetoothService.errorStream.listen((error) {
+      if (!mounted) {
+        print('Gatheru Widget not mounted, ignoring error event');
+        return;
+      }
+      setState(() {
+        _bluetoothStatus = 'Error: $error';
+        _isReadingBluetooth = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.contains('ScaleReader is not initialized')
+              ? 'Scale not initialized. Please try again.'
+              : 'Bluetooth error: $error'),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    });
     if (widget.feeding != null) {
       _animalController.text = widget.feeding!.farmAnimalId.toString();
       _shadeController.text = widget.feeding!.shadeId?.toString() ?? '';
@@ -122,174 +162,127 @@ class _FeedingFormPageState extends State<FeedingFormPage> {
   }
 
   Future<void> _checkBluetoothPermissions() async {
-    if (await FlutterBluePlus.isAvailable == false) {
+    try {
+      if (Platform.isAndroid) {
+        Map<Permission, PermissionStatus> statuses = await [
+          Permission.bluetoothScan,
+          Permission.bluetoothConnect,
+        ].request();
+        if (!statuses[Permission.bluetoothScan]!.isGranted ||
+            !statuses[Permission.bluetoothConnect]!.isGranted) {
+          print('Gatheru Bluetooth permissions denied');
+          setState(() {
+            _bluetoothStatus = 'Permissions denied';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please grant Bluetooth permissions')),
+          );
+          return;
+        }
+      }
+      bool isBluetoothEnabled = await _bluetoothService.isBluetoothEnabled();
+      print('Gatheru Bluetooth enabled: $isBluetoothEnabled');
+      if (!isBluetoothEnabled) {
+        setState(() {
+          _bluetoothStatus = 'Please enable Bluetooth';
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enable Bluetooth in settings')),
+        );
+        return;
+      }
       setState(() {
-        _bluetoothStatus = 'Bluetooth is not available on this device';
+        _bluetoothStatus = 'Ready to scan';
+      });
+    } catch (e) {
+      print('Gatheru Error checking Bluetooth permissions: $e');
+      setState(() {
+        _bluetoothStatus = 'Error checking Bluetooth: $e';
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bluetooth is not available')),
+        SnackBar(content: Text('Bluetooth error: $e')),
       );
-      return;
     }
+  }
 
-    BluetoothAdapterState state = await FlutterBluePlus.adapterState.first;
-    if (state != BluetoothAdapterState.on) {
-      setState(() {
-        _bluetoothStatus = 'Bluetooth is not enabled';
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enable Bluetooth')),
-      );
+  Future<void> _selectBluetoothDevice() async {
+    if (_isReadingBluetooth) {
+      print('Gatheru Already reading Bluetooth, ignoring request');
       return;
     }
 
     setState(() {
-      _bluetoothStatus = 'Bluetooth is ready';
+      _isReadingBluetooth = true;
+      _bluetoothStatus = 'Checking Bluetooth...';
+      _isFirstWeightReceived = false; // Reset to allow new first reading
     });
-  }
 
-  Future<void> _selectBluetoothDevice() async {
     try {
-      // Check Bluetooth adapter state
-      if (await FlutterBluePlus.adapterState.first != BluetoothAdapterState.on) {
+      if (Platform.isAndroid) {
+        Map<Permission, PermissionStatus> statuses = await [
+          Permission.bluetoothScan,
+          Permission.bluetoothConnect,
+        ].request();
+        if (!statuses[Permission.bluetoothScan]!.isGranted ||
+            !statuses[Permission.bluetoothConnect]!.isGranted) {
+          print('Gatheru Bluetooth permissions denied');
+          setState(() {
+            _isReadingBluetooth = false;
+            _bluetoothStatus = 'Permissions denied';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please grant Bluetooth permissions')),
+          );
+          return;
+        }
+      }
+
+      bool isBluetoothEnabled = await _bluetoothService.isBluetoothEnabled();
+      print('Gatheru Bluetooth enabled: $isBluetoothEnabled');
+      if (!isBluetoothEnabled) {
         setState(() {
           _isReadingBluetooth = false;
-          _bluetoothStatus = 'Bluetooth is not enabled';
+          _bluetoothStatus = 'Please enable Bluetooth';
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enable Bluetooth')),
+          const SnackBar(content: Text('Please enable Bluetooth in settings')),
         );
         return;
       }
 
-      // Request permissions on Android
-      if (Platform.isAndroid) {
-        var status = await Permission.bluetoothScan.request();
-        if (!status.isGranted) {
-          setState(() {
-            _isReadingBluetooth = false;
-            _bluetoothStatus = 'Bluetooth scan permission denied';
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please grant Bluetooth scan permission')),
-          );
-          return;
-        }
-        status = await Permission.bluetoothConnect.request();
-        if (!status.isGranted) {
-          setState(() {
-            _isReadingBluetooth = false;
-            _bluetoothStatus = 'Bluetooth connect permission denied';
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please grant Bluetooth connect permission')),
-          );
-          return;
-        }
-        status = await Permission.location.request();
-        if (!status.isGranted) {
-          setState(() {
-            _isReadingBluetooth = false;
-            _bluetoothStatus = 'Location permission denied';
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please grant location permission for Bluetooth scanning')),
-          );
-          return;
-        }
-      }
-
-      setState(() {
-        _isReadingBluetooth = true;
-        _bluetoothStatus = 'Scanning for devices... Please ensure the scale is powered on and in pairing mode (e.g., step on it).';
-      });
-
-      List<ScanResult> scanResults = [];
-      StreamSubscription<List<ScanResult>>? scanSubscription;
-
-      // Listen for scan results and process advertisement data
-      scanSubscription = FlutterBluePlus.scanResults.listen((results) {
-        scanResults = results;
-        for (var result in results) {
-          final device = result.device;
-          final advData = result.advertisementData;
-          print('Device: ${advData.advName.isNotEmpty ? advData.advName : device.platformName.isNotEmpty ? device.platformName : 'Unknown'} (${device.remoteId})');
-          print('  Manufacturer Data: ${advData.manufacturerData.entries.map((e) => 'ID: ${e.key}, Data: ${e.value.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}').join(', ')}');
-          print('  Service Data: ${advData.serviceData.entries.map((e) => 'UUID: ${e.key}, Data: ${e.value.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}').join(', ')}');
-          print('  Service UUIDs: ${advData.serviceUuids}');
-
-          // Attempt to parse weight from manufacturerData or serviceData
-          double? measuredWeight = _parseWeightFromAdvertisement(advData);
-          if (measuredWeight != null) {
-            setState(() {
-              _quantityController.text = measuredWeight.toStringAsFixed(2);
-              _bluetoothStatus = 'Weight: ${measuredWeight.toStringAsFixed(2)} L (from advertisement)';
-              _isReadingBluetooth = false;
-            });
-            FlutterBluePlus.stopScan();
-            scanSubscription?.cancel();
-            return;
-          }
-        }
-      }, onError: (e) {
-        print('Scan Error: $e');
+      final List<Map<String, dynamic>> deviceList = await _bluetoothService.getPairedDevices();
+      if (deviceList.isEmpty) {
         setState(() {
           _isReadingBluetooth = false;
-          _bluetoothStatus = 'Scan error: $e';
-        });
-      });
-
-      // Start scanning with a filter for weight scale service (optional)
-      await FlutterBluePlus.startScan(
-        androidLegacy: true,
-      );
-
-      // Wait for scan to complete or weight to be found
-      await Future.any([
-        Future.delayed(const Duration(seconds: 15)),
-        // Add a condition to stop if weight is found (handled in the listener)
-      ]);
-
-      await FlutterBluePlus.stopScan();
-      scanSubscription?.cancel();
-
-      if (!mounted) return;
-
-      if (scanResults.isEmpty) {
-        setState(() {
-          _isReadingBluetooth = false;
-          _bluetoothStatus = 'No Bluetooth devices found. Ensure the scale is powered on and in pairing mode.';
+          _bluetoothStatus = 'No paired devices found';
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No Bluetooth devices found. Please ensure the scale is powered on and in pairing mode (e.g., step on it or press a button).'),
-            duration: Duration(seconds: 5),
+            content: Text('No paired devices found. Please pair the scale in Bluetooth settings.'),
+            duration: Duration(seconds: 6),
           ),
         );
         return;
       }
 
-      // If no weight was found in advertisements, show dialog to select device for GATT connection
-      final BluetoothDevice? selectedDevice = await showDialog<BluetoothDevice>(
+      final Map<String, dynamic>? selectedDevice = await showDialog<Map<String, dynamic>>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Select Bluetooth Scale'),
-          content: Container(
+          title: const Text('Select Paired Bluetooth Device'),
+          content: SizedBox(
             width: double.maxFinite,
-            constraints: const BoxConstraints(maxHeight: 300),
+            height: 300,
             child: ListView.builder(
-              itemCount: scanResults.length,
+              itemCount: deviceList.length,
               itemBuilder: (context, index) {
-                final result = scanResults[index];
-                final device = result.device;
-                final name = result.advertisementData.advName.isNotEmpty
-                    ? result.advertisementData.advName
-                    : device.platformName.isNotEmpty
-                    ? device.platformName
-                    : 'Scale (${device.remoteId})';
+                final device = deviceList[index];
+                final name = device['name'] ?? 'Unknown';
+                final address = device['address'];
+                final type = device['type'];
+                final model = device['model'] ?? 'default';
                 return ListTile(
                   title: Text(name),
-                  subtitle: Text('${device.remoteId} (RSSI: ${result.rssi})'),
+                  subtitle: Text('MAC: $address, Type: $type, Model: $model'),
                   onTap: () => Navigator.pop(context, device),
                 );
               },
@@ -304,344 +297,61 @@ class _FeedingFormPageState extends State<FeedingFormPage> {
         ),
       );
 
-      if (selectedDevice != null && mounted) {
-        setState(() {
-          _bluetoothStatus = 'Connecting to ${selectedDevice.platformName.isNotEmpty ? selectedDevice.platformName : 'Scale'}...';
-        });
-        await _connectedDevice?.disconnect();
-        _connectedDevice = selectedDevice;
-        await selectedDevice.connect(timeout: const Duration(seconds: 15));
-
-        // Read Device Name characteristic (2a00) from Generic Access service (1800)
-        String deviceName = selectedDevice.platformName.isNotEmpty
-            ? selectedDevice.platformName
-            : 'Scale (${selectedDevice.remoteId})';
-        try {
-          List<BluetoothService> services = await selectedDevice.discoverServices();
-          for (var service in services) {
-            //print("=================${service}");
-            if (service.uuid.toString().toLowerCase() == 'ffe0') {
-
-              for (var characteristic in service.characteristics) {
-                print("===========${characteristic}");
-                if (characteristic.uuid.toString().toLowerCase() == 'ffe1') {
-                  List<int> value = await characteristic.read();
-                  deviceName = String.fromCharCodes(value).trim();
-                  print('Device Name from 2a00: $deviceName');
-                  break;
-                }
-              }
-              break;
-            }
-          }
-        } catch (e) {
-          print('Error reading Device Name characteristic: $e');
-        }
-
-        setState(() {
-          _bluetoothStatus = 'Connected to $deviceName';
-        });
-
-        // Try GATT connection for weight data
-        await _discoverServicesAndReadWeight(selectedDevice);
-      } else {
+      if (selectedDevice == null) {
         setState(() {
           _isReadingBluetooth = false;
           _bluetoothStatus = 'No device selected';
         });
+        return;
       }
-    } catch (e) {
-      if (mounted) {
+
+      final String deviceAddress = selectedDevice['address'];
+      final String deviceName = selectedDevice['name'] ?? deviceAddress;
+      final String scaleModel = selectedDevice['model'] ?? 'default';
+      print('Gatheru Selected device: $deviceName, address: $deviceAddress, model: $scaleModel');
+      setState(() {
+        _bluetoothStatus = 'Connecting to $deviceName...';
+      });
+
+      try {
+        await _bluetoothService.startScaleReader(deviceAddress, scaleModel: scaleModel).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('Timeout connecting to Bluetooth scale');
+          },
+        );
+        setState(() {
+          _bluetoothStatus = 'Reading weight... Step on the scale';
+        });
+
+        await _bluetoothService.weightStream.first.timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {
+            throw Exception('No weight received from scale within 30 seconds');
+          },
+        );
+      } catch (e) {
         setState(() {
           _isReadingBluetooth = false;
-          _bluetoothStatus = 'Bluetooth error: $e';
+          _bluetoothStatus = 'Error: $e';
         });
+        String errorMessage = e.toString();
+        if (errorMessage.contains('Connection error')) {
+          errorMessage = 'Failed to connect to scale. Ensure it is powered on and in range.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Bluetooth error: $e')),
+          SnackBar(content: Text(errorMessage), duration: const Duration(seconds: 6)),
         );
       }
-    }
-  }
-
-  double? _parseWeightFromAdvertisement(AdvertisementData advData) {
-    print('Attempting to parse weight from advertisement data...');
-    print('Manufacturer Data: ${advData.manufacturerData.entries.map((e) => 'ID: ${e.key.toRadixString(16)}, Data: ${e.value.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}').join('; ')}');
-    print('Service Data: ${advData.serviceData.entries.map((e) => 'UUID: ${e.key.str}, Data: ${e.value.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}').join('; ')}');
-
-    // Check Service Data for FFE0 (your scale’s service UUID)
-    final customServiceUuid = Guid('0000ffe0-0000-1000-8000-00805f9b34fb');
-    if (advData.serviceData.containsKey(customServiceUuid)) {
-      final data = advData.serviceData[customServiceUuid]!;
-      if (data.isNotEmpty) {
-        try {
-          // Try parsing "ST,GS,12.34KG" format
-          String decoded = utf8.decode(data, allowMalformed: true).trim();
-          print('Service Data (FFE0) Decoded: "$decoded"');
-
-          // Match "ST,GS,12.34KG" or similar
-          RegExp regExp = RegExp(r"ST,GS,(\d+\.\d{2})(KG)?", caseSensitive: false);
-          Match? match = regExp.firstMatch(decoded);
-
-          if (match != null && match.group(1) != null) {
-            double? weight = double.tryParse(match.group(1)!);
-            if (weight != null && weight >= 0 && weight <= 1000) { // Adjust range for feed quantities
-              print('Parsed weight from FFE0 Service Data: $weight kg');
-              return weight;
-            }
-          }
-
-          // Fallback: Generic numeric string
-          regExp = RegExp(r"(\d+\.\d*)", caseSensitive: false);
-          match = regExp.firstMatch(decoded);
-          if (match != null && match.group(1) != null) {
-            double? weight = double.tryParse(match.group(1)!);
-            if (weight != null && weight >= 0 && weight <= 1000) {
-              print('Parsed fallback weight from FFE0 Service Data: $weight kg');
-              return weight;
-            }
-          }
-        } catch (e) {
-          print('Error parsing FFE0 service data: $e');
-        }
-      }
-    }
-
-    // Check Manufacturer Data (less likely for your scale)
-    for (var entry in advData.manufacturerData.entries) {
-      final data = entry.value;
-      if (data.isNotEmpty) {
-        try {
-          String decoded = utf8.decode(data, allowMalformed: true).trim();
-          print('Manufacturer Data (ID: ${entry.key.toRadixString(16)}) Decoded: "$decoded"');
-
-          // Try "ST,GS,12.34KG" format
-          RegExp regExp = RegExp(r"ST,GS,(\d+\.\d{2})(KG)?", caseSensitive: false);
-          Match? match = regExp.firstMatch(decoded);
-
-          if (match != null && match.group(1) != null) {
-            double? weight = double.tryParse(match.group(1)!);
-            if (weight != null && weight >= 0 && weight <= 1000) {
-              print('Parsed weight from Manufacturer Data: $weight kg');
-              return weight;
-            }
-          }
-
-          // Fallback: Generic numeric string
-          regExp = RegExp(r"(\d+\.\d*)", caseSensitive: false);
-          match = regExp.firstMatch(decoded);
-          if (match != null && match.group(1) != null) {
-            double? weight = double.tryParse(match.group(1)!);
-            if (weight != null && weight >= 0 && weight <= 1000) {
-              print('Parsed fallback weight from Manufacturer Data: $weight kg');
-              return weight;
-            }
-          }
-        } catch (e) {
-          print('Error parsing Manufacturer Data (ID: ${entry.key.toRadixString(16)}): $e');
-        }
-      }
-    }
-
-    print('No parsable weight found in advertisement data.');
-    return null;
-  }
-
-  Future<void> _discoverServicesAndReadWeight(BluetoothDevice device) async {
-    try {
-      setState(() {
-        _isReadingBluetooth = true;
-        _bluetoothStatus = 'Discovering services...';
-      });
-
-      List<BluetoothService> services = await device.discoverServices();
-
-      // Try Weight Scale Service (0x181D)
-      const String weightServiceUuid = 'ffe0';
-      const String weightCharacteristicUuid = 'ffe2';
-
-      for (var service in services) {
-        print('Service UUID: ${service.uuid.str}');
-        if (service.uuid.toString().toLowerCase() == weightServiceUuid) {
-          print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
-          for (var characteristic in service.characteristics) {
-            print('  Characteristic UUID: ${characteristic.uuid.str}');
-            print('    Properties: ${characteristic.properties}');
-            // if (characteristic.uuid.toString().toLowerCase() == weightCharacteristicUuid) {
-            if(true){
-              if (characteristic.properties.indicate || characteristic.properties.notify) {
-                print('Subscribing to Weight Measurement characteristic: ${characteristic.uuid}');
-                await characteristic.setNotifyValue(true);
-                _weightSubscription?.cancel();
-                _weightSubscription = characteristic.lastValueStream.listen(
-                      (value) {
-                    // print('Received data (hex): ${value.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
-                    if (value.isNotEmpty) {
-                      double measuredWeight = _parseWeightFromCharacteristic(value);
-                      setState(() {
-                        _quantityController.text = measuredWeight.toStringAsFixed(2);
-                        _bluetoothStatus = 'Weight: ${measuredWeight.toStringAsFixed(2)} L';
-                      });
-                    }
-                  },
-                  onError: (e) {
-                    print('Stream error: $e');
-                    setState(() {
-                      _bluetoothStatus = 'Stream error: $e';
-                    });
-                  },
-                );
-                // Wait for data
-                await Future.any([
-                  Future.delayed(const Duration(seconds: 10)),
-                  characteristic.lastValueStream.firstWhere((value) => value.isNotEmpty, orElse: () => []),
-                ]);
-                return;
-              } else if (characteristic.properties.read) {
-                print('Reading Weight Measurement characteristic: ${characteristic.uuid}');
-                List<int> value = await characteristic.read();
-                //print('Read data (hex): ${value.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
-                if (value.isNotEmpty) {
-                  double measuredWeight = _parseWeightFromCharacteristic(value);
-                  setState(() {
-                    _quantityController.text = measuredWeight.toStringAsFixed(2);
-                    _bluetoothStatus = 'Weight: ${measuredWeight.toStringAsFixed(2)} L (read)';
-                  });
-                  return;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Fallback to any notify/indicate or read characteristic
-      for (var service in services) {
-        for (var characteristic in service.characteristics) {
-          if (characteristic.properties.notify || characteristic.properties.indicate) {
-            print('Subscribing to characteristic: ${characteristic.uuid}');
-            await characteristic.setNotifyValue(true);
-            _weightSubscription?.cancel();
-            _weightSubscription = characteristic.lastValueStream.listen(
-                  (value) {
-                print('Received data (hex): ${value.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
-                if (value.isNotEmpty) {
-                  double measuredWeight = _parseWeightFromCharacteristic(value);
-                  setState(() {
-                    _quantityController.text = measuredWeight.toStringAsFixed(2);
-                    _bluetoothStatus = 'Weight: ${measuredWeight.toStringAsFixed(2)} L';
-                  });
-                }
-              },
-              onError: (e) {
-                print('Stream error: $e');
-                setState(() {
-                  _bluetoothStatus = 'Stream error: $e';
-                });
-              },
-            );
-            await Future.any([
-              Future.delayed(const Duration(seconds: 10)),
-              characteristic.lastValueStream.firstWhere((value) => value.isNotEmpty, orElse: () => []),
-            ]);
-            return;
-          } else if (characteristic.properties.read) {
-            print('Reading characteristic: ${characteristic.uuid}');
-            List<int> value = await characteristic.read();
-            print('Read data (hex): ${value.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
-            if (value.isNotEmpty) {
-              double measuredWeight = _parseWeightFromCharacteristic(value);
-              setState(() {
-                _quantityController.text = measuredWeight.toStringAsFixed(2);
-                _bluetoothStatus = 'Weight: ${measuredWeight.toStringAsFixed(2)} L (read)';
-              });
-              return;
-            }
-          }
-        }
-      }
-
-      setState(() {
-        _isReadingBluetooth = false;
-        _bluetoothStatus = 'No suitable characteristics found. Weight may be in advertisements.';
-      });
     } catch (e) {
+      print('Gatheru Error in selectBluetoothDevice: $e');
       setState(() {
         _isReadingBluetooth = false;
-        _bluetoothStatus = 'Service discovery error: $e';
+        _bluetoothStatus = 'Error: $e';
       });
-      print('Bluetooth Service Discovery Error: $e');
-    } finally {
-      setState(() {
-        _isReadingBluetooth = false;
-      });
-    }
-  }
-
-  double _parseWeightFromCharacteristic(List<int> value) {
-
-    try {
-      if (value.isEmpty || value.every((b) => b == 0)) {
-        return 0.0;
-      }
-
-      // Attempt 1: BLE Weight Scale Service format (UUID 0x2A9D)
-      // This is for specific BLE devices adhering to the standard.
-      // if (value.length >= 3) {
-      //   // Check if the first byte (flags) indicates a valid measurement,
-      //   // though for simplicity, we're just checking length here.
-      //   // A more robust implementation would parse the flags.
-      //   int rawWeight = (value[2] << 8) + value[1]; // Little-endian
-      //   double weightKg = rawWeight * 0.005; // 0.005 kg resolution
-      //   // Add a check for realistic values to avoid misinterpreting ASCII as BLE data
-      //   if (weightKg > 0.01 && weightKg < 500) { // More robust range check for BLE
-      //     print('Parsed as BLE Weight Scale: ${weightKg} kg');
-      //     return weightKg;
-      //   }
-      // }
-
-      // Attempt 2: Try ASCII decoding and robust unit extraction
-      String decoded = utf8.decode(value, allowMalformed: true).trim(); // Trim whitespace
-      print('Characteristic Decoded: "$decoded"');
-
-      // Regex to capture numbers (integers or decimals) and an optional unit (KG, LBS, etc.)
-      // It looks for a sequence of digits, optionally a dot and more digits, followed by optional spaces and letters.
-      final RegExp weightRegex = RegExp(r'(\d+(\.\d+)?)\s*([a-zA-Z]+)?');
-      final Match? match = weightRegex.firstMatch(decoded);
-
-      if (match != null) {
-        String? numericPart = match.group(1); // The numeric value (e.g., "1.2")
-        String? unitPart = match.group(3);    // The unit (e.g., "KG", "LBS")
-
-        double? weight = double.tryParse(numericPart ?? '');
-
-        if (weight != null && weight > 0 && weight < 1000) { // Reasonable weight range
-          if (unitPart != null) {
-            final String upperCaseUnit = unitPart.toUpperCase();
-            if (upperCaseUnit.contains('KG')) {
-              print('Parsed as ASCII String (KG): $weight kg');
-              return weight; // Already in kg
-            } else if (upperCaseUnit.contains('LB') || upperCaseUnit.contains('LBS')) {
-              // Convert pounds to kilograms (1 lb = 0.453592 kg)
-              double weightKg = weight * 0.453592;
-              print('Parsed as ASCII String (LBS): $weight lbs = ${weightKg} kg');
-              return weightKg;
-            }
-            // Add more unit conversions here if needed (e.g., 'G' for grams)
-          } else {
-            // If no unit is specified, you might assume KG or return 0.0
-            // based on your application's requirements. For now, we'll assume KG if in a reasonable range.
-            print('Parsed as ASCII String (No Unit, assuming KG): $weight kg');
-            return weight;
-          }
-        }
-      }
-
-      // If none of the above parsing methods work
-      print('Failed to parse weight from characteristic: $value');
-      return 0.0;
-    } catch (e) {
-      print('Error parsing characteristic data: $e');
-      return 0.0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), duration: const Duration(seconds: 6)),
+      );
     }
   }
 
@@ -825,6 +535,25 @@ class _FeedingFormPageState extends State<FeedingFormPage> {
     }
   }
 
+  void _addReading() {
+    final value = _quantityController.text;
+    if (value.isNotEmpty && double.tryParse(value) != null && double.parse(value) > 0) {
+      setState(() {
+        final weight = double.parse(value);
+        _readings.add(weight);
+        _totalWeight = _readings.fold(0.0, (sum, item) => sum + item);
+        _quantityController.clear();
+        _bluetoothStatus = 'Ready to scan';
+        _isFirstWeightReceived = false; // Allow new first reading after adding
+        print('Gatheru: Added reading: $weight, Total weight: $_totalWeight, Readings: $_readings');
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid positive number')),
+      );
+    }
+  }
+
   Future<void> _selectFeedingDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -880,7 +609,7 @@ class _FeedingFormPageState extends State<FeedingFormPage> {
           'farm_shade_id': _selectedShadeId,
           'inv_item_id': _selectedItemId,
           'feeding_date': DateFormat('yyyy-MM-dd').format(_selectedFeedingDate),
-          'quantity': double.parse(_quantityController.text),
+          'quantity': double.parse(_totalWeight.toString()),
           'cost': _costController.text.isEmpty ? null : double.parse(_costController.text),
           'notes': _notesController.text.isEmpty ? null : _notesController.text,
         };
@@ -1194,28 +923,162 @@ class _FeedingFormPageState extends State<FeedingFormPage> {
                   labelText: 'Quantity (Kg)',
                   border: const OutlineInputBorder(),
                   prefixIcon: const Icon(Icons.scale),
-                  suffixIcon: IconButton(
-                    icon: _isReadingBluetooth
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                        : const Icon(Icons.bluetooth),
-                    onPressed: _isReadingBluetooth ? null : _selectBluetoothDevice,
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_isReadingBluetooth)
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        IconButton(
+                          icon: const Icon(Icons.bluetooth),
+                          onPressed: _selectBluetoothDevice,
+                        ),
+                    ],
                   ),
                 ),
+                readOnly: true,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter quantity';
-                  }
-                  if (double.tryParse(value) == null || double.parse(value) <= 0) {
-                    return 'Please enter a valid positive number';
+                  if (_totalWeight == 0.0) {
+                    return 'Please add at least one valid reading';
                   }
                   return null;
                 },
               ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: Text(
+                  'Bluetooth Status: $_bluetoothStatus',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _bluetoothStatus.contains('Error') ||
+                        _bluetoothStatus.contains('failed') ||
+                        _bluetoothStatus.contains('No scales')
+                        ? Colors.red
+                        : Colors.grey,
+                  ),
+                ),
+              ),
+              if (_bluetoothStatus.contains('Error') || _bluetoothStatus.contains('No scales'))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: ElevatedButton(
+                    onPressed: _selectBluetoothDevice,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Config.themeColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('Retry Bluetooth Scan'),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: ElevatedButton(
+                  onPressed: _addReading,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Config.themeColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Add Reading'),
+                ),
+              ),
+              if (_readings.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Text(
+                    'Total Weight: ${_totalWeight.toStringAsFixed(2)} Kg',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8.0),
+                        color: Colors.grey[200],
+                        child: Row(
+                          children: const [
+                            Expanded(
+                              flex: 1,
+                              child: Text(
+                                'Reading #',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                'Weight (Kg)',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        height: 150,
+                        child: ListView.builder(
+                          itemCount: _readings.length,
+                          itemBuilder: (context, index) {
+                            return Container(
+                              padding: const EdgeInsets.all(8.0),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(color: Colors.grey.shade300),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 1,
+                                    child: Text('Reading ${index + 1}'),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      _readings[index].toStringAsFixed(2),
+                                      textAlign: TextAlign.right,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Padding(
+                //   padding: const EdgeInsets.symmetric(vertical: 8.0),
+                //   child: ElevatedButton(
+                //     onPressed: _saveTotal,
+                //     style: ElevatedButton.styleFrom(
+                //       backgroundColor: Config.themeColor,
+                //       foregroundColor: Colors.white,
+                //       shape: RoundedRectangleBorder(
+                //         borderRadius: BorderRadius.circular(8),
+                //       ),
+                //     ),
+                //     child: const Text('Save Total'),
+                //   ),
+                // ),
+              ],
               const SizedBox(height: 8),
               Text(
                 _bluetoothStatus,

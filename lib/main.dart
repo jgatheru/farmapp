@@ -18,6 +18,7 @@ import 'package:farmapp/com/wisedigits/crm/persons/persons.dart';
 import 'package:farmapp/com/wisedigits/farm/reports/productivity.dart';
 import 'package:farmapp/com/wisedigits/farm/reports/productivitylist.dart';
 import 'package:farmapp/com/wisedigits/farm/reports/summary.dart';
+import 'package:farmapp/com/wisedigits/pos/orders/orders.dart';
 
 import 'com/wisedigits/farm/animals/addAnimals.dart';
 import 'com/wisedigits/farm/animals/animals.dart';
@@ -73,6 +74,7 @@ class MyApp extends StatelessWidget {
         '/viewAppointmentReport': (context) => AppointmentReportPage(),
         '/viewAppointmentReportBySpeciality': (context) => SpecialityReportPage(),
         '/productivityReport': (context) => ReportPage(),
+        '/viewOrders': (context) => OrdersPage(),
         '/summary': (context) => MilkProductionSummaryPage()
       },
     );

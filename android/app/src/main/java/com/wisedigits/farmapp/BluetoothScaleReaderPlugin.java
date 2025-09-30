@@ -56,13 +56,31 @@ public class BluetoothScaleReaderPlugin implements FlutterPlugin {
         }
     };
 
+    // Add custom lifecycle methods
+    public void onStop() {
+        Log.d(TAG, "BluetoothScaleReaderPlugin onStop");
+        stopScaleReader();
+    }
+
+    public void onDestroy() {
+        Log.d(TAG, "BluetoothScaleReaderPlugin onDestroy");
+        teardownChannels();
+        if (context != null && isBound) {
+            unbindSerialService(context);
+        }
+    }
+
     @Override
     public void onAttachedToEngine(FlutterPluginBinding binding) {
         setupChannels(binding.getBinaryMessenger(), binding.getApplicationContext());
-        Intent intent = new Intent(binding.getApplicationContext(), SerialService.class);
-        binding.getApplicationContext().startService(intent);
-        binding.getApplicationContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+        bindSerialService(binding.getApplicationContext());
     }
+//    public void onAttachedToEngine(FlutterPluginBinding binding) {
+//        setupChannels(binding.getBinaryMessenger(), binding.getApplicationContext());
+//        Intent intent = new Intent(binding.getApplicationContext(), SerialService.class);
+//        binding.getApplicationContext().startService(intent);
+//        binding.getApplicationContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+//    }
 
     @Override
     public void onDetachedFromEngine(FlutterPluginBinding binding) {
@@ -204,24 +222,38 @@ public class BluetoothScaleReaderPlugin implements FlutterPlugin {
     }
 
     private void stopScaleReader() {
+        Log.d(TAG, "Stopping scaleReader");
         if (scaleReader != null) {
-            Log.d(TAG, "Stopping scaleReader");
-            scaleReader.disconnect();
+            try {
+                scaleReader.disconnect();
+            } catch (Exception e) {
+                Log.e(TAG, "Error disconnecting scaleReader: " + e.getMessage(), e);
+            }
             scaleReader = null;
         }
         if (serialService != null) {
-            serialService.detach();
+            try {
+                serialService.detach();
+                serialService.disconnect();
+            } catch (Exception e) {
+                Log.e(TAG, "Error detaching/disconnecting serialService: " + e.getMessage(), e);
+            }
+            serialService = null;
         }
     }
 
     private void teardownChannels() {
         Log.d(TAG, "Tearing down channels");
-        if (context != null) {
-            unbindSerialService(context);
-        }
-        methodChannel.setMethodCallHandler(null);
-        eventChannel.setStreamHandler(null);
         stopScaleReader();
+        if (methodChannel != null) {
+            methodChannel.setMethodCallHandler(null);
+            methodChannel = null;
+        }
+        if (eventChannel != null) {
+            eventChannel.setStreamHandler(null);
+            eventChannel = null;
+        }
+        context = null;
     }
 
     private void getPairedDevices(MethodCall call, MethodChannel.Result result) {
@@ -262,14 +294,36 @@ public class BluetoothScaleReaderPlugin implements FlutterPlugin {
     }
 
 
+//    private void bindSerialService(Context context) {
+//        Intent intent = new Intent(context, SerialService.class);
+//        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+//    }
+//    private void unbindSerialService(Context context) {
+//        if (isBound) {
+//            context.unbindService(serviceConnection);
+//            isBound = false;
+//            serialService = null;
+//        }
+//    }
+
     private void bindSerialService(Context context) {
+        Log.d(TAG, "Binding SerialService");
         Intent intent = new Intent(context, SerialService.class);
-        context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+        isBound = context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+        if (!isBound) {
+            Log.e(TAG, "Failed to bind SerialService");
+        }
     }
     private void unbindSerialService(Context context) {
-        if (isBound) {
-            context.unbindService(serviceConnection);
+        if (isBound && serviceBound) {
+            Log.d(TAG, "Unbinding SerialService");
+            try {
+                context.unbindService(serviceConnection);
+            } catch (Exception e) {
+                Log.e(TAG, "Error unbinding SerialService: " + e.getMessage(), e);
+            }
             isBound = false;
+            serviceBound = false;
             serialService = null;
         }
     }

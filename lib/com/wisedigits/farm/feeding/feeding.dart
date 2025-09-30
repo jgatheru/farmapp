@@ -137,7 +137,8 @@ class _FeedingsListPageState extends State<FeedingsListPage> {
   int? _selectedAnimalId;
   int? _selectedShadeId;
 
-  final String _fetchEndpoint = '${Config.baseUrl}/modules/farm/feedings/';
+  // final String _fetchEndpoint = '${Config.baseUrl}/modules/farm/feedings/';
+  final String _fetchEndpoint = 'http://213.136.81.123/farm/feedings/getFeedings.php';
   final String _fetchAnimalsEndpoint = '${Config.baseUrl}/modules/farm/animals/';
   final String _fetchItemsEndpoint = '${Config.baseUrl}/modules/inv/items/';
   final String _fetchShadesEndpoint = '${Config.baseUrl}/modules/farm/shades/';
@@ -298,6 +299,19 @@ class _FeedingsListPageState extends State<FeedingsListPage> {
     });
 
     try {
+
+      final Map<String, dynamic> filterData = {
+
+        'from_date': DateFormat('yyyy-MM-dd').format(_fromDate),
+
+        'to_date': DateFormat('yyyy-MM-dd').format(_toDate),
+
+        if (_selectedAnimalId != null) 'farm_animal_id': _selectedAnimalId,
+
+      };
+
+      final Map<String, dynamic> requestBody = {'filter': filterData};
+
       String url = _fetchEndpoint;
       url += '?from_date=${DateFormat('yyyy-MM-dd').format(_fromDate)}';
       url += '&to_date=${DateFormat('yyyy-MM-dd').format(_toDate)}';
@@ -308,6 +322,8 @@ class _FeedingsListPageState extends State<FeedingsListPage> {
         url += '&farm_shade_id=$_selectedShadeId';
       }
 
+      print(url);
+
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
       final authToken = sessionProvider.currentUser?.token;
 
@@ -316,11 +332,15 @@ class _FeedingsListPageState extends State<FeedingsListPage> {
       }
 
       final response = await http.get(
+
         Uri.parse(url),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $authToken',
         },
+
+        //body: jsonEncode(requestBody),
+
       );
 
       if (!mounted) return;
@@ -409,7 +429,7 @@ class _FeedingsListPageState extends State<FeedingsListPage> {
       orElse: () => ShadeForFilter(id: 0, name: ''),
     ).name;
   }
-
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -479,190 +499,242 @@ class _FeedingsListPageState extends State<FeedingsListPage> {
                 style: TextStyle(fontSize: 18, color: Colors.grey),
               ),
             )
-                : SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columnSpacing: 16.0,
-                dataRowMinHeight: 38.0,
-                dataRowMaxHeight: 40.0,
-                headingRowColor: WidgetStateProperty.resolveWith((states) => Config.themeColor.withOpacity(0.1)),
-                columns: const <DataColumn>[
-                  DataColumn(label: Text('ID', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Animal', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Shade', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Item', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Quantity', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Cost', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Notes', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
-                ],
-                rows: _records.map((record) {
-                  return DataRow(
-                    cells: <DataCell>[
-                      DataCell(
-                        InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FeedingFormPage(feeding: record),
-                              ),
-                            ).then((result) {
-                              if (result == true) {
-                                _fetchRecords();
-                              }
-                            });
-                          },
-                          child: Text(record.id.toString()),
-                        ),
-                      ),
-                      DataCell(
-                        InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FeedingFormPage(feeding: record),
-                              ),
-                            ).then((result) {
-                              if (result == true) {
-                                _fetchRecords();
-                              }
-                            });
-                          },
-                          child: Text(_getAnimalTagNumber(record.farmAnimalId, record.animal)),
-                        ),
-                      ),
-                      DataCell(
-                        InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FeedingFormPage(feeding: record),
-                              ),
-                            ).then((result) {
-                              if (result == true) {
-                                _fetchRecords();
-                              }
-                            });
-                          },
-                          child: Text(_getShadeName(record.shadeId, record.shade)),
-                        ),
-                      ),
-                      DataCell(
-                        InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FeedingFormPage(feeding: record),
-                              ),
-                            ).then((result) {
-                              if (result == true) {
-                                _fetchRecords();
-                              }
-                            });
-                          },
-                          child: Text(_getItemName(record.invItemId, record.item)),
-                        ),
-                      ),
-                      DataCell(
-                        InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FeedingFormPage(feeding: record),
-                              ),
-                            ).then((result) {
-                              if (result == true) {
-                                _fetchRecords();
-                              }
-                            });
-                          },
-                          child: Text(DateFormat('yyyy-MM-dd').format(record.feedingDate)),
-                        ),
-                      ),
-                      DataCell(
-                        InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FeedingFormPage(feeding: record),
-                              ),
-                            ).then((result) {
-                              if (result == true) {
-                                _fetchRecords();
-                              }
-                            });
-                          },
-                          child: Text(record.quantity.toStringAsFixed(2)),
-                        ),
-                      ),
-                      DataCell(
-                        InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FeedingFormPage(feeding: record),
-                              ),
-                            ).then((result) {
-                              if (result == true) {
-                                _fetchRecords();
-                              }
-                            });
-                          },
-                          child: Text(record.cost != null ? record.cost!.toStringAsFixed(2) : ''),
-                        ),
-                      ),
-                      DataCell(
-                        InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FeedingFormPage(feeding: record),
-                              ),
-                            ).then((result) {
-                              if (result == true) {
-                                _fetchRecords();
-                              }
-                            });
-                          },
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.25),
-                            child: Text(
-                              record.notes ?? '',
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 2,
+                : Scrollbar(
+              thumbVisibility: true, // Makes the scrollbar always visible
+              child: SingleChildScrollView(
+                scrollDirection: Axis.vertical, // Enable vertical scrolling
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal, // Existing horizontal scrolling
+                  child: DataTable(
+                    columnSpacing: 16.0,
+                    dataRowMinHeight: 38.0,
+                    dataRowMaxHeight: 40.0,
+                    headingRowColor: WidgetStateProperty.resolveWith(
+                            (states) => Config.themeColor.withOpacity(0.1)),
+                    columns: const <DataColumn>[
+                      DataColumn(
+                          label: Text('ID',
+                              style:
+                              TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(
+                          label: Text('Animal',
+                              style:
+                              TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(
+                          label: Text('Shade',
+                              style:
+                              TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(
+                          label: Text('Item',
+                              style:
+                              TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(
+                          label: Text('Date',
+                              style:
+                              TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(
+                          label: Text('Quantity',
+                              style:
+                              TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(
+                          label: Text('Cost',
+                              style:
+                              TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(
+                          label: Text('Notes',
+                              style:
+                              TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(
+                          label: Text('Actions',
+                              style:
+                              TextStyle(fontWeight: FontWeight.bold))),
+                    ],
+                    rows: _records.map((record) {
+                      return DataRow(
+                        cells: <DataCell>[
+                          DataCell(
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        FeedingFormPage(feeding: record),
+                                  ),
+                                ).then((result) {
+                                  if (result == true) {
+                                    _fetchRecords();
+                                  }
+                                });
+                              },
+                              child: Text(record.id.toString()),
                             ),
                           ),
-                        ),
-                      ),
-                      DataCell(
-                        IconButton(
-                          icon: const Icon(Icons.edit),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FeedingFormPage(feeding: record),
+                          DataCell(
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        FeedingFormPage(feeding: record),
+                                  ),
+                                ).then((result) {
+                                  if (result == true) {
+                                    _fetchRecords();
+                                  }
+                                });
+                              },
+                              child: Text(_getAnimalTagNumber(
+                                  record.farmAnimalId, record.animal)),
+                            ),
+                          ),
+                          DataCell(
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        FeedingFormPage(feeding: record),
+                                  ),
+                                ).then((result) {
+                                  if (result == true) {
+                                    _fetchRecords();
+                                  }
+                                });
+                              },
+                              child: Text(
+                                  _getShadeName(record.shadeId, record.shade)),
+                            ),
+                          ),
+                          DataCell(
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        FeedingFormPage(feeding: record),
+                                  ),
+                                ).then((result) {
+                                  if (result == true) {
+                                    _fetchRecords();
+                                  }
+                                });
+                              },
+                              child: Text(
+                                  _getItemName(record.invItemId, record.item)),
+                            ),
+                          ),
+                          DataCell(
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        FeedingFormPage(feeding: record),
+                                  ),
+                                ).then((result) {
+                                  if (result == true) {
+                                    _fetchRecords();
+                                  }
+                                });
+                              },
+                              child: Text(DateFormat('yyyy-MM-dd')
+                                  .format(record.feedingDate)),
+                            ),
+                          ),
+                          DataCell(
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        FeedingFormPage(feeding: record),
+                                  ),
+                                ).then((result) {
+                                  if (result == true) {
+                                    _fetchRecords();
+                                  }
+                                });
+                              },
+                              child: Text(record.quantity.toStringAsFixed(2)),
+                            ),
+                          ),
+                          DataCell(
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        FeedingFormPage(feeding: record),
+                                  ),
+                                ).then((result) {
+                                  if (result == true) {
+                                    _fetchRecords();
+                                  }
+                                });
+                              },
+                              child: Text(record.cost != null
+                                  ? record.cost!.toStringAsFixed(2)
+                                  : ''),
+                            ),
+                          ),
+                          DataCell(
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        FeedingFormPage(feeding: record),
+                                  ),
+                                ).then((result) {
+                                  if (result == true) {
+                                    _fetchRecords();
+                                  }
+                                });
+                              },
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                    maxWidth:
+                                    MediaQuery.of(context).size.width *
+                                        0.25),
+                                child: Text(
+                                  record.notes ?? '',
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 2,
+                                ),
                               ),
-                            ).then((result) {
-                              if (result == true) {
-                                _fetchRecords();
-                              }
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  );
-                }).toList(),
+                            ),
+                          ),
+                          DataCell(
+                            IconButton(
+                              icon: const Icon(Icons.edit),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        FeedingFormPage(feeding: record),
+                                  ),
+                                ).then((result) {
+                                  if (result == true) {
+                                    _fetchRecords();
+                                  }
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
               ),
             ),
           ),
@@ -712,8 +784,8 @@ class _FeedingFilterDialogState extends State<FeedingFilterDialog> {
   late DateTime _selectedToDate;
   AnimalForFilter? _selectedAnimal;
   ShadeForFilter? _selectedShade;
-  List<AnimalForFilter> _animals = [];
-  List<ShadeForFilter> _shades = [];
+  List<AnimalForFilter> _animals = [AnimalForFilter(id: 0, tagNumber: 'All Animals')];
+  List<ShadeForFilter> _shades = [ShadeForFilter(id: 0, name: 'All Shades')];
   bool _isLoadingAnimals = false;
   bool _isLoadingShades = false;
   String? _animalErrorMessage;
@@ -731,22 +803,7 @@ class _FeedingFilterDialogState extends State<FeedingFilterDialog> {
     _selectedFromDate = widget.initialFromDate;
     _selectedToDate = widget.initialToDate;
     _fetchAnimals();
-    _fetchShades().then((_) {
-      if (widget.initialShadeId != null) {
-        _selectedShade = _shades.firstWhere(
-              (shade) => shade.id == widget.initialShadeId,
-          orElse: () => ShadeForFilter(id: 0, name: 'All Shades'),
-        );
-        _shadeSearchController.text = _selectedShade!.name;
-      }
-      if (widget.initialAnimalId != null) {
-        _selectedAnimal = _animals.firstWhere(
-              (animal) => animal.id == widget.initialAnimalId,
-          orElse: () => AnimalForFilter(id: 0, tagNumber: 'All Animals'),
-        );
-        _animalSearchController.text = _selectedAnimal!.tagNumber;
-      }
-    });
+    _fetchShades();
   }
 
   @override
@@ -790,16 +847,32 @@ class _FeedingFilterDialogState extends State<FeedingFilterDialog> {
 
       if (response.statusCode == 200) {
         final dynamic decodedResponse = jsonDecode(response.body);
+        List<AnimalForFilter> fetchedAnimals = [];
         if (decodedResponse is List) {
-          _animals = decodedResponse.map((json) => AnimalForFilter.fromJson(json as Map<String, dynamic>)).toList();
+          fetchedAnimals = decodedResponse.map((json) => AnimalForFilter.fromJson(json as Map<String, dynamic>)).toList();
         } else if (decodedResponse is Map<String, dynamic> && decodedResponse['data'] is List) {
-          _animals = (decodedResponse['data'] as List).map((json) => AnimalForFilter.fromJson(json as Map<String, dynamic>)).toList();
+          fetchedAnimals = (decodedResponse['data'] as List).map((json) => AnimalForFilter.fromJson(json as Map<String, dynamic>)).toList();
         } else {
-          _animalErrorMessage = decodedResponse['message'] ?? 'Failed to load animals: Invalid API format.';
+          setState(() {
+            _animalErrorMessage = decodedResponse['message'] ?? 'Failed to load animals: Invalid API format.';
+          });
           print('DEBUG: Animal API response not valid: $decodedResponse');
+          return;
         }
+        setState(() {
+          _animals = [AnimalForFilter(id: 0, tagNumber: 'All Animals'), ...fetchedAnimals];
+          if (widget.initialAnimalId != null) {
+            _selectedAnimal = _animals.firstWhere(
+                  (animal) => animal.id == widget.initialAnimalId,
+              orElse: () => AnimalForFilter(id: 0, tagNumber: 'All Animals'),
+            );
+            _animalSearchController.text = _selectedAnimal!.tagNumber;
+          }
+        });
       } else {
-        _animalErrorMessage = 'Failed to load animals: Server returned status ${response.statusCode}';
+        setState(() {
+          _animalErrorMessage = 'Failed to load animals: Server returned status ${response.statusCode}';
+        });
         print('DEBUG: Animal fetch failed. Status: ${response.statusCode}, Body: ${response.body}');
       }
     } catch (e) {
@@ -846,16 +919,32 @@ class _FeedingFilterDialogState extends State<FeedingFilterDialog> {
 
       if (response.statusCode == 200) {
         final dynamic decodedResponse = jsonDecode(response.body);
+        List<ShadeForFilter> fetchedShades = [];
         if (decodedResponse is List) {
-          _shades = decodedResponse.map((json) => ShadeForFilter.fromJson(json as Map<String, dynamic>)).toList();
+          fetchedShades = decodedResponse.map((json) => ShadeForFilter.fromJson(json as Map<String, dynamic>)).toList();
         } else if (decodedResponse is Map<String, dynamic> && decodedResponse['data'] is List) {
-          _shades = (decodedResponse['data'] as List).map((json) => ShadeForFilter.fromJson(json as Map<String, dynamic>)).toList();
+          fetchedShades = (decodedResponse['data'] as List).map((json) => ShadeForFilter.fromJson(json as Map<String, dynamic>)).toList();
         } else {
-          _shadeErrorMessage = decodedResponse['message'] ?? 'Failed to load shades: Invalid API format.';
+          setState(() {
+            _shadeErrorMessage = decodedResponse['message'] ?? 'Failed to load shades: Invalid API format.';
+          });
           print('DEBUG: Shade API response not valid: $decodedResponse');
+          return;
         }
+        setState(() {
+          _shades = [ShadeForFilter(id: 0, name: 'All Shades'), ...fetchedShades];
+          if (widget.initialShadeId != null) {
+            _selectedShade = _shades.firstWhere(
+                  (shade) => shade.id == widget.initialShadeId,
+              orElse: () => ShadeForFilter(id: 0, name: 'All Shades'),
+            );
+            _shadeSearchController.text = _selectedShade!.name;
+          }
+        });
       } else {
-        _shadeErrorMessage = 'Failed to load shades: Server returned status ${response.statusCode}';
+        setState(() {
+          _shadeErrorMessage = 'Failed to load shades: Server returned status ${response.statusCode}';
+        });
         print('DEBUG: Shade fetch failed. Status: ${response.statusCode}, Body: ${response.body}');
       }
     } catch (e) {
@@ -874,6 +963,16 @@ class _FeedingFilterDialogState extends State<FeedingFilterDialog> {
       initialDate: _selectedFromDate,
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
+      builder: (BuildContext context, Widget? child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            primaryColor: Config.themeColor,
+            colorScheme: ColorScheme.light(primary: Config.themeColor),
+            buttonTheme: const ButtonThemeData(textTheme: ButtonTextTheme.primary),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null && picked != _selectedFromDate) {
       setState(() {
@@ -888,6 +987,16 @@ class _FeedingFilterDialogState extends State<FeedingFilterDialog> {
       initialDate: _selectedToDate,
       firstDate: _selectedFromDate,
       lastDate: DateTime.now(),
+      builder: (BuildContext context, Widget? child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            primaryColor: Config.themeColor,
+            colorScheme: ColorScheme.light(primary: Config.themeColor),
+            buttonTheme: const ButtonThemeData(textTheme: ButtonTextTheme.primary),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null && picked != _selectedToDate) {
       setState(() {
@@ -897,7 +1006,7 @@ class _FeedingFilterDialogState extends State<FeedingFilterDialog> {
   }
 
   void _applyFilters() {
-    if (_selectedAnimal != null && _selectedShade != null) {
+    if (_selectedAnimal != null && _selectedShade != null && _selectedAnimal!.id != 0 && _selectedShade!.id != 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select either an animal or a shade, not both')),
       );
@@ -926,242 +1035,250 @@ class _FeedingFilterDialogState extends State<FeedingFilterDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Filter Feeding Records'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            InputDecorator(
-              decoration: InputDecoration(
-                labelText: 'From Date',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.calendar_today),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 0.0),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Flexible(
-                    child: Text(
-                      DateFormat('yyyy-MM-dd').format(_selectedFromDate),
-                      style: const TextStyle(fontSize: 16),
-                      overflow: TextOverflow.ellipsis,
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.6, // Limit dialog height
+          maxWidth: MediaQuery.of(context).size.width * 0.8, // Limit dialog width
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'From Date',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.calendar_today),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 0.0),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        DateFormat('yyyy-MM-dd').format(_selectedFromDate),
+                        style: const TextStyle(fontSize: 16),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () => _selectFromDate(context),
-                    child: const Text('Select'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            InputDecorator(
-              decoration: InputDecoration(
-                labelText: 'To Date',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.calendar_today),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 0.0),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Flexible(
-                    child: Text(
-                      DateFormat('yyyy-MM-dd').format(_selectedToDate),
-                      style: const TextStyle(fontSize: 16),
-                      overflow: TextOverflow.ellipsis,
+                    TextButton(
+                      onPressed: () => _selectFromDate(context),
+                      child: const Text('Select'),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () => _selectToDate(context),
-                    child: const Text('Select'),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            _isLoadingAnimals
-                ? const CircularProgressIndicator()
-                : _animalErrorMessage != null
-                ? Text(
-              'Error loading animals: $_animalErrorMessage',
-              style: const TextStyle(color: Colors.red),
-            )
-                : Autocomplete<AnimalForFilter>(
-              optionsBuilder: (TextEditingValue textEditingValue) {
-                if (textEditingValue.text == '') {
-                  return const Iterable<AnimalForFilter>.empty();
-                }
-                return _animals.where((AnimalForFilter animal) {
-                  return animal.tagNumber.toLowerCase().contains(textEditingValue.text.toLowerCase());
-                });
-              },
-              displayStringForOption: (AnimalForFilter option) => option.tagNumber,
-              fieldViewBuilder: (BuildContext context, TextEditingController fieldTextEditingController, FocusNode fieldFocusNode, VoidCallback onFieldSubmitted) {
-                if (_selectedAnimal != null && fieldTextEditingController.text.isEmpty) {
-                  fieldTextEditingController.text = _selectedAnimal!.tagNumber;
-                }
-                return TextField(
-                  controller: fieldTextEditingController,
-                  focusNode: fieldFocusNode,
-                  decoration: InputDecoration(
-                    labelText: 'Filter by Animal Tag Number',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.pets),
-                    suffixIcon: fieldTextEditingController.text.isNotEmpty
-                        ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        fieldTextEditingController.clear();
+              const SizedBox(height: 16),
+              InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'To Date',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.calendar_today),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 0.0),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        DateFormat('yyyy-MM-dd').format(_selectedToDate),
+                        style: const TextStyle(fontSize: 16),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _selectToDate(context),
+                      child: const Text('Select'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _isLoadingAnimals
+                  ? const CircularProgressIndicator()
+                  : _animalErrorMessage != null
+                  ? Text(
+                'Error loading animals: $_animalErrorMessage',
+                style: const TextStyle(color: Colors.red),
+              )
+                  : Autocomplete<AnimalForFilter>(
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  final query = textEditingValue.text.toLowerCase();
+                  return _animals.where((animal) {
+                    return animal.tagNumber.toLowerCase().contains(query) || query.isEmpty;
+                  });
+                },
+                displayStringForOption: (AnimalForFilter option) => option.tagNumber,
+                fieldViewBuilder: (BuildContext context, TextEditingController fieldTextEditingController, FocusNode fieldFocusNode, VoidCallback onFieldSubmitted) {
+                  if (_selectedAnimal != null && fieldTextEditingController.text.isEmpty) {
+                    fieldTextEditingController.text = _selectedAnimal!.tagNumber;
+                  }
+                  return TextField(
+                    controller: fieldTextEditingController,
+                    focusNode: fieldFocusNode,
+                    decoration: InputDecoration(
+                      labelText: 'Filter by Animal Tag Number',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.pets),
+                      suffixIcon: fieldTextEditingController.text.isNotEmpty
+                          ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          fieldTextEditingController.clear();
+                          setState(() {
+                            _selectedAnimal = null;
+                            _selectedShade = null; // Clear shade when animal is cleared
+                            _shadeSearchController.clear();
+                          });
+                        },
+                      )
+                          : null,
+                    ),
+                    onChanged: (text) {
+                      if (text.isEmpty) {
                         setState(() {
                           _selectedAnimal = null;
+                          _selectedShade = null; // Clear shade when animal is cleared
+                          _shadeSearchController.clear();
                         });
-                      },
-                    )
-                        : null,
-                  ),
-                  onChanged: (text) {
-                    if (text.isEmpty) {
-                      setState(() {
-                        _selectedAnimal = null;
-                        _selectedShade = null; // Clear shade when animal is cleared
-                        _shadeSearchController.clear();
-                      });
+                      }
+                    },
+                  );
+                },
+                onSelected: (AnimalForFilter selection) {
+                  setState(() {
+                    _selectedAnimal = selection.id == 0 ? null : selection;
+                    if (_selectedAnimal != null) {
+                      _selectedShade = null; // Clear shade if animal is selected
+                      _shadeSearchController.clear();
                     }
-                  },
-                );
-              },
-              onSelected: (AnimalForFilter selection) {
-                setState(() {
-                  _selectedAnimal = selection.id == 0 ? null : selection;
-                  if (_selectedAnimal != null) {
-                    _selectedShade = null; // Clear shade if animal is selected
-                    _shadeSearchController.clear();
-                  }
-                  _animalSearchController.text = _selectedAnimal?.tagNumber ?? '';
-                });
-                FocusScope.of(context).unfocus();
-              },
-              optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<AnimalForFilter> onSelected, Iterable<AnimalForFilter> options) {
-                return Align(
-                  alignment: Alignment.topLeft,
-                  child: Material(
-                    elevation: 4.0,
-                    child: SizedBox(
-                      height: 200.0,
-                      child: ListView.builder(
-                        padding: EdgeInsets.zero,
-                        itemCount: options.length,
-                        itemBuilder: (BuildContext context, int index) {
-                          final AnimalForFilter option = options.elementAt(index);
-                          return InkWell(
-                            onTap: () {
-                              onSelected(option);
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Text(option.tagNumber),
-                            ),
-                          );
-                        },
+                    _animalSearchController.text = _selectedAnimal?.tagNumber ?? '';
+                  });
+                  FocusScope.of(context).unfocus();
+                },
+                optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<AnimalForFilter> onSelected, Iterable<AnimalForFilter> options) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4.0,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 200.0),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          itemCount: options.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final AnimalForFilter option = options.elementAt(index);
+                            return InkWell(
+                              onTap: () {
+                                onSelected(option);
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(option.tagNumber),
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _isLoadingShades
-                ? const CircularProgressIndicator()
-                : _shadeErrorMessage != null
-                ? Text(
-              'Error loading shades: $_shadeErrorMessage',
-              style: const TextStyle(color: Colors.red),
-            )
-                : Autocomplete<ShadeForFilter>(
-              optionsBuilder: (TextEditingValue textEditingValue) {
-                if (textEditingValue.text == '') {
-                  return const Iterable<ShadeForFilter>.empty();
-                }
-                return _shades.where((ShadeForFilter shade) {
-                  return shade.name.toLowerCase().contains(textEditingValue.text.toLowerCase());
-                });
-              },
-              displayStringForOption: (ShadeForFilter option) => option.name,
-              fieldViewBuilder: (BuildContext context, TextEditingController fieldTextEditingController, FocusNode fieldFocusNode, VoidCallback onFieldSubmitted) {
-                if (_selectedShade != null && fieldTextEditingController.text.isEmpty) {
-                  fieldTextEditingController.text = _selectedShade!.name;
-                }
-                return TextField(
-                  controller: fieldTextEditingController,
-                  focusNode: fieldFocusNode,
-                  decoration: InputDecoration(
-                    labelText: 'Filter by Shade Name',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.roofing),
-                    suffixIcon: fieldTextEditingController.text.isNotEmpty
-                        ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        fieldTextEditingController.clear();
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              _isLoadingShades
+                  ? const CircularProgressIndicator()
+                  : _shadeErrorMessage != null
+                  ? Text(
+                'Error loading shades: $_shadeErrorMessage',
+                style: const TextStyle(color: Colors.red),
+              )
+                  : Autocomplete<ShadeForFilter>(
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  final query = textEditingValue.text.toLowerCase();
+                  return _shades.where((shade) {
+                    return shade.name.toLowerCase().contains(query) || query.isEmpty;
+                  });
+                },
+                displayStringForOption: (ShadeForFilter option) => option.name,
+                fieldViewBuilder: (BuildContext context, TextEditingController fieldTextEditingController, FocusNode fieldFocusNode, VoidCallback onFieldSubmitted) {
+                  if (_selectedShade != null && fieldTextEditingController.text.isEmpty) {
+                    fieldTextEditingController.text = _selectedShade!.name;
+                  }
+                  return TextField(
+                    controller: fieldTextEditingController,
+                    focusNode: fieldFocusNode,
+                    decoration: InputDecoration(
+                      labelText: 'Filter by Shade Name',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.roofing),
+                      suffixIcon: fieldTextEditingController.text.isNotEmpty
+                          ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          fieldTextEditingController.clear();
+                          setState(() {
+                            _selectedShade = null;
+                            _selectedAnimal = null; // Clear animal when shade is cleared
+                            _animalSearchController.clear();
+                          });
+                        },
+                      )
+                          : null,
+                    ),
+                    onChanged: (text) {
+                      if (text.isEmpty) {
                         setState(() {
                           _selectedShade = null;
+                          _selectedAnimal = null; // Clear animal when shade is cleared
+                          _animalSearchController.clear();
                         });
-                      },
-                    )
-                        : null,
-                  ),
-                  onChanged: (text) {
-                    if (text.isEmpty) {
-                      setState(() {
-                        _selectedShade = null;
-                        _selectedAnimal = null; // Clear animal when shade is cleared
-                        _animalSearchController.clear();
-                      });
+                      }
+                    },
+                  );
+                },
+                onSelected: (ShadeForFilter selection) {
+                  setState(() {
+                    _selectedShade = selection.id == 0 ? null : selection;
+                    if (_selectedShade != null) {
+                      _selectedAnimal = null; // Clear animal if shade is selected
+                      _animalSearchController.clear();
                     }
-                  },
-                );
-              },
-              onSelected: (ShadeForFilter selection) {
-                setState(() {
-                  _selectedShade = selection.id == 0 ? null : selection;
-                  if (_selectedShade != null) {
-                    _selectedAnimal = null; // Clear animal if shade is selected
-                    _animalSearchController.clear();
-                  }
-                  _shadeSearchController.text = _selectedShade?.name ?? '';
-                });
-                FocusScope.of(context).unfocus();
-              },
-              optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<ShadeForFilter> onSelected, Iterable<ShadeForFilter> options) {
-                return Align(
-                  alignment: Alignment.topLeft,
-                  child: Material(
-                    elevation: 4.0,
-                    child: SizedBox(
-                      height: 200.0,
-                      child: ListView.builder(
-                        padding: EdgeInsets.zero,
-                        itemCount: options.length,
-                        itemBuilder: (BuildContext context, int index) {
-                          final ShadeForFilter option = options.elementAt(index);
-                          return InkWell(
-                            onTap: () {
-                              onSelected(option);
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Text(option.name),
-                            ),
-                          );
-                        },
+                    _shadeSearchController.text = _selectedShade?.name ?? '';
+                  });
+                  FocusScope.of(context).unfocus();
+                },
+                optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<ShadeForFilter> onSelected, Iterable<ShadeForFilter> options) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4.0,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 200.0),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          itemCount: options.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final ShadeForFilter option = options.elementAt(index);
+                            return InkWell(
+                              onTap: () {
+                                onSelected(option);
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Text(option.name),
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
-          ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
       actions: <Widget>[
@@ -1170,16 +1287,22 @@ class _FeedingFilterDialogState extends State<FeedingFilterDialog> {
             _clearFilters();
             _applyFilters();
           },
+          style: TextButton.styleFrom(foregroundColor: Config.themeColor),
           child: const Text('Clear Filters'),
         ),
         TextButton(
           onPressed: () {
             Navigator.pop(context);
           },
+          style: TextButton.styleFrom(foregroundColor: Config.themeColor),
           child: const Text('Cancel'),
         ),
         ElevatedButton(
           onPressed: _applyFilters,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Config.themeColor,
+            foregroundColor: Colors.white,
+          ),
           child: const Text('Apply Filters'),
         ),
       ],
