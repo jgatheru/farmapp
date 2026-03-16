@@ -23,6 +23,20 @@ class MilkProductionRecordFormPage extends StatefulWidget {
   State<MilkProductionRecordFormPage> createState() => _MilkProductionRecordFormPageState();
 }
 
+class QualityGrade {
+  final String value;
+  final String label;
+
+  const QualityGrade(this.value, this.label);
+}
+
+// In your widget
+final List<QualityGrade> qualityGrades = [
+  QualityGrade('A', 'A - Good Quality'),
+  QualityGrade('B', 'B - Colostrum'),
+  QualityGrade('C', 'C - Not fit'),
+];
+
 class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _animalController = TextEditingController();
@@ -976,12 +990,18 @@ class _MilkProductionRecordFormPageState extends State<MilkProductionRecordFormP
                   prefixIcon: Icon(Icons.star),
                 ),
                 hint: const Text('Select Quality Grade'),
-                items: <String>['A', 'B', 'C'].map((String value) {
+                items: qualityGrades.map((QualityGrade grade) {
                   return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
+                    value: grade.value, // Saves 'A', 'B', 'C'
+                    child: Text(grade.label), // Displays descriptive text
                   );
                 }).toList(),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please select a quality grade';
+                  }
+                  return null; // Return null if the value is valid
+                },
                 onChanged: (String? newValue) {
                   setState(() {
                     _selectedQualityGrade = newValue;

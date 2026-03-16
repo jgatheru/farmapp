@@ -68,9 +68,10 @@ class Feeding {
       updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? ''),
       updatedBy: (json['updated_by'] is num) ? (json['updated_by'] as num).toInt() : null,
       createdBy: (json['created_by'] is num) ? (json['created_by'] as num).toInt() : null,
-      animal: json['animal'] as Map<String, dynamic>?,
-      shade: json['shade'] as Map<String, dynamic>?,
-      item: json['item'] as Map<String, dynamic>?,
+      animal: json['animal'] is Map<String, dynamic> ? json['animal'] as Map<String, dynamic> : null,
+      // FIX: Handle boolean shade values by converting to null
+      shade: json['shade'] is Map<String, dynamic> ? json['shade'] as Map<String, dynamic> : null,
+      item: json['item'] is Map<String, dynamic> ? json['item'] as Map<String, dynamic> : null,
     );
   }
 }
@@ -299,19 +300,6 @@ class _FeedingsListPageState extends State<FeedingsListPage> {
     });
 
     try {
-
-      final Map<String, dynamic> filterData = {
-
-        'from_date': DateFormat('yyyy-MM-dd').format(_fromDate),
-
-        'to_date': DateFormat('yyyy-MM-dd').format(_toDate),
-
-        if (_selectedAnimalId != null) 'farm_animal_id': _selectedAnimalId,
-
-      };
-
-      final Map<String, dynamic> requestBody = {'filter': filterData};
-
       String url = _fetchEndpoint;
       url += '?from_date=${DateFormat('yyyy-MM-dd').format(_fromDate)}';
       url += '&to_date=${DateFormat('yyyy-MM-dd').format(_toDate)}';
@@ -332,15 +320,11 @@ class _FeedingsListPageState extends State<FeedingsListPage> {
       }
 
       final response = await http.get(
-
         Uri.parse(url),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $authToken',
         },
-
-        //body: jsonEncode(requestBody),
-
       );
 
       if (!mounted) return;
@@ -352,11 +336,24 @@ class _FeedingsListPageState extends State<FeedingsListPage> {
       print('DEBUG: Feedings response: ${response.body}');
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
-        final List<dynamic> recordsData = responseData['data'];
-        _records = recordsData
-            .map((json) => Feeding.fromJson(json))
-            .where((record) => (record.farmAnimalId != null) != (record.shadeId != null))
-            .toList();
+
+        if (responseData['success'] == true) {
+          final List<dynamic> recordsData = responseData['body'] ?? [];
+
+          // FIX: Remove the problematic filter condition
+          _records = recordsData
+              .map((json) => Feeding.fromJson(json))
+          // Remove this filter as it's incorrectly filtering out valid records
+          // .where((record) => (record.farmAnimalId != null) != (record.shadeId != null))
+              .toList();
+
+          print('DEBUG: Loaded ${_records.length} records'); // Debug line
+        } else {
+          _errorMessage = responseData['message'] ?? 'Failed to fetch records';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(_errorMessage!)),
+          );
+        }
       } else {
         _errorMessage = 'Server error: ${response.statusCode}';
         ScaffoldMessenger.of(context).showSnackBar(

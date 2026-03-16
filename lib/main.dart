@@ -48,7 +48,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Farm App', // Added a title for the app
+      title: 'Sisi Pharmaceutical', // Added a title for the app
       initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginPage(), // Added const for better performance
@@ -69,7 +69,12 @@ class MyApp extends StatelessWidget {
         '/viewFacilitys': (context)=>FacilityListPage(),
         '/addFacility': (context)=>AddFacilityPage(),
         '/viewAppointments': (context)=>AppointmentListPage(0),
-        '/viewCompleteAppointments': (context)=>AppointmentListPage(1),
+        '/viewCompleteAppointments': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          // Extract reportType from the Map (default to 1)
+          final reportType = (args as Map<String, dynamic>?)?['reportType'] ?? 1;
+          return AppointmentListPage(reportType);
+        },
         '/addAppointment': (context)=>AddAppointmentPage(),
         '/viewAppointmentReport': (context) => AppointmentReportPage(),
         '/viewAppointmentReportBySpeciality': (context) => SpecialityReportPage(),

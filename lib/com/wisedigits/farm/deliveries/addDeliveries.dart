@@ -50,30 +50,56 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
   bool _isFirstWeightReceived = false;
   final _bluetoothService = BluetoothScaleService();
 
-  final String _addEndpoint = '${Config.baseUrl}/modules/farm/milk-deliveries/create';
+  // New state variables for milk cans
+  List<MilkCan> _allMilkCans = [];
+  MilkCan? _selectedMilkCan;
+  bool _isLoadingMilkCans = false;
+  String? _milkCanFetchError;
+
+  // final String _addEndpoint = '${Config.baseUrl}/modules/farm/milk-deliveries/create';
+  final String _addEndpoint = 'https://system.wisedigits.co.ke/wonnie_mobile/api/ajax/android_save_delivery.php';
+
   late String _updateEndpoint = '${Config.baseUrl}/modules/farm/milk-deliveries/';
   final String _fetchCustomersEndpoint = '${Config.baseUrl}/modules/crm/customers/';
   final String _fetchSessionsEndpoint = '${Config.baseUrl}/modules/farm/sessions/';
+  // final String _fetchMilkCansEndpoint = '${Config.baseUrl}/modules/farm/milk-cans/';
+  final String _fetchMilkCansEndpoint = 'http://213.136.81.123/farm/milkproduction/getCans.php';
 
   @override
   void initState() {
     super.initState();
     _fetchCustomers();
     _fetchSessions();
+    _fetchMilkCans();
     _weightSubscription = _bluetoothService.weightStream.listen((weight) {
       if (!mounted) {
         print('Gatheru Widget not mounted, ignoring weight event');
         return;
       }
       setState(() {
+        double netWeight = weight;
+
+        // Subtract tare weight if a milk can is selected
+        if (_selectedMilkCan != null) {
+          netWeight = weight - _selectedMilkCan!.tareWeight;
+          if (netWeight < 0) netWeight = 0; // Ensure weight doesn't go negative
+        }
+
         if (!_isFirstWeightReceived) {
-          _quantityController.text = weight.toStringAsFixed(2);
+          _quantityController.text = netWeight.toStringAsFixed(2);
           _isFirstWeightReceived = true;
         }
-        _quantityController.text = weight.toStringAsFixed(2);
-        _bluetoothStatus = 'Weight: ${weight.toStringAsFixed(2)} kg';
+        _quantityController.text = netWeight.toStringAsFixed(2);
+
+        // Update status to show both gross and net weight
+        if (_selectedMilkCan != null) {
+          _bluetoothStatus = 'Gross: ${weight.toStringAsFixed(2)} kg | Net: ${netWeight.toStringAsFixed(2)} kg (Tare: ${_selectedMilkCan!.tareWeight.toStringAsFixed(2)} kg)';
+        } else {
+          _bluetoothStatus = 'Weight: ${weight.toStringAsFixed(2)} kg';
+        }
+
         _isReadingBluetooth = false;
-        print('Gatheru: Received weight: $weight, First weight received: $_isFirstWeightReceived');
+        print('Gatheru: Received weight: $weight, Net weight: $netWeight, First weight received: $_isFirstWeightReceived');
       });
     });
     _errorSubscription = _bluetoothService.errorStream.listen((error) {
@@ -416,6 +442,68 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
     }
   }
 
+  Future<void> _fetchMilkCans() async {
+    setState(() {
+      _isLoadingMilkCans = true;
+      _milkCanFetchError = null;
+    });
+
+    final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
+    final authToken = sessionProvider.currentUser?.token;
+
+    if (authToken == null) {
+      throw Exception('User not authenticated');
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse(_fetchMilkCansEndpoint),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $authToken',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingMilkCans = false;
+      });
+
+      if (response.statusCode == 200) {
+        final dynamic decodedResponse = jsonDecode(response.body);
+        print('DEBUG: Milk Can API response: $decodedResponse');
+
+        if (decodedResponse is List) {
+          _allMilkCans = decodedResponse.map((json) => MilkCan.fromJson(json as Map<String, dynamic>)).toList();
+        } else if (decodedResponse is Map<String, dynamic>) {
+          // Check for 'body' field instead of 'data'
+          if (decodedResponse['body'] is List) {
+            _allMilkCans = (decodedResponse['body'] as List).map((json) => MilkCan.fromJson(json as Map<String, dynamic>)).toList();
+          } else if (decodedResponse['data'] is List) {
+            _allMilkCans = (decodedResponse['data'] as List).map((json) => MilkCan.fromJson(json as Map<String, dynamic>)).toList();
+          } else {
+            _milkCanFetchError = 'Failed to load milk cans: No data found in response.';
+            print('DEBUG: Milk Can API response has no body or data list: $decodedResponse');
+          }
+        } else {
+          _milkCanFetchError = 'Failed to load milk cans: Invalid API format.';
+          print('DEBUG: Milk Can API response not valid: $decodedResponse');
+        }
+      } else {
+        _milkCanFetchError = 'Failed to load milk cans: Server returned status ${response.statusCode}';
+        print('DEBUG: Milk Can fetch failed. Status: ${response.statusCode}, Body: ${response.body}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingMilkCans = false;
+        _milkCanFetchError = 'Could not connect to fetch milk cans: $e';
+      });
+      print('DEBUG: Error fetching milk cans: $e');
+    }
+  }
+
   void _addReading() {
     final value = _quantityController.text;
     if (value.isNotEmpty && double.tryParse(value) != null && double.parse(value) > 0) {
@@ -487,6 +575,11 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
           'notes': _notesController.text.isEmpty ? null : _notesController.text,
         };
 
+        // Add milk can ID if selected
+        if (_selectedMilkCan != null) {
+          deliveryData['milk_can_id'] = _selectedMilkCan!.id;
+        }
+
         if (widget.delivery != null) {
           deliveryData['id'] = widget.delivery!.id;
           _updateEndpoint += "${deliveryData['id']}/edit";
@@ -523,49 +616,50 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
         if (response.statusCode == 200) {
           final Map<String, dynamic> responseData = jsonDecode(response.body);
           // if (responseData['success'] == true) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(widget.delivery == null ? 'Delivery added successfully!' : 'Delivery updated successfully!')),
-            );print("We are here!!!");
-            // Clear all fields and reset state after successful save
-            setState(() {
-              _readings.clear();
-              _totalWeight = 0.0;
-              _quantityController.clear();
-              _isFirstWeightReceived = false;
-              _bluetoothStatus = 'Ready to scan';
-              _customerController.clear();
-              _sessionController.clear();
-              _notesController.clear();
-              _selectedCustomerId = null;
-              _selectedSessionId = null;
-              _selectedDeliveryDate = DateTime.now();
-            });
-            // Show confirmation dialog before navigating back
-            bool? navigateBack = await showDialog<bool>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Success'),
-                content: const Text('Delivery saved successfully. Do you want to return to the previous screen?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false), // Stay on the form
-                    child: const Text('Stay'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, true), // Navigate back
-                    child: const Text('Return'),
-                  ),
-                ],
-              ),
-            );
-            if (navigateBack == true) {
-              Navigator.pop(context, true);
-            }
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Failed to ${widget.delivery == null ? 'add' : 'update'} delivery')),
-            );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(widget.delivery == null ? 'Delivery added successfully!' : 'Delivery updated successfully!')),
+          );print("We are here!!!");
+          // Clear all fields and reset state after successful save
+          setState(() {
+            _readings.clear();
+            _totalWeight = 0.0;
+            _quantityController.clear();
+            _isFirstWeightReceived = false;
+            _bluetoothStatus = 'Ready to scan';
+            _customerController.clear();
+            _sessionController.clear();
+            _notesController.clear();
+            _selectedCustomerId = null;
+            _selectedSessionId = null;
+            _selectedMilkCan = null;
+            _selectedDeliveryDate = DateTime.now();
+          });
+          // Show confirmation dialog before navigating back
+          bool? navigateBack = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Success'),
+              content: const Text('Delivery saved successfully. Do you want to return to the previous screen?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false), // Stay on the form
+                  child: const Text('Stay'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true), // Navigate back
+                  child: const Text('Return'),
+                ),
+              ],
+            ),
+          );
+          if (navigateBack == true) {
+            Navigator.pop(context, true);
           }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to ${widget.delivery == null ? 'add' : 'update'} delivery')),
+          );
+        }
         // } else {
         //   ScaffoldMessenger.of(context).showSnackBar(
         //     SnackBar(content: Text('Server error: ${response.statusCode}')),
@@ -735,6 +829,54 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
                   ),
                 ),
               const SizedBox(height: 16),
+              // Milk Can Dropdown
+              if (_isLoadingMilkCans)
+                const Center(child: CircularProgressIndicator())
+              else if (_milkCanFetchError != null)
+                Center(
+                  child: Text(
+                    _milkCanFetchError!,
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                DropdownButtonFormField<MilkCan>(
+                  value: _selectedMilkCan,
+                  decoration: const InputDecoration(
+                    labelText: 'Milk Can (Tare Weight)',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.local_drink),
+                  ),
+                  items: _allMilkCans.map((MilkCan can) {
+                    return DropdownMenuItem<MilkCan>(
+                      value: can,
+                      child: Text('${can.name} (Tare: ${can.tareWeight.toStringAsFixed(2)} kg)'),
+                    );
+                  }).toList(),
+                  onChanged: (MilkCan? newValue) {
+                    setState(() {
+                      _selectedMilkCan = newValue;
+
+                      // Recalculate current reading if there's a value in the quantity controller
+                      if (_quantityController.text.isNotEmpty) {
+                        final currentWeight = double.tryParse(_quantityController.text);
+                        if (currentWeight != null && _selectedMilkCan != null) {
+                          final netWeight = currentWeight - _selectedMilkCan!.tareWeight;
+                          _quantityController.text = netWeight > 0 ? netWeight.toStringAsFixed(2) : '0.00';
+                        }
+                      }
+                    });
+                  },
+                  validator: (value) {
+                    // Make milk can selection optional or required based on your business logic
+                    if (value == null) {
+                      return 'Please select a milk can';
+                    }
+                    return null;
+                  },
+                ),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _quantityController,
                 decoration: InputDecoration(
@@ -758,7 +900,7 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
                     ],
                   ),
                 ),
-                readOnly: true,
+                // readOnly: true,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   if (_totalWeight == 0.0) {
@@ -882,20 +1024,6 @@ class _DeliveryFormPageState extends State<DeliveryFormPage> {
                     ],
                   ),
                 ),
-                // Padding(
-                //   padding: const EdgeInsets.symmetric(vertical: 8.0),
-                //   child: ElevatedButton(
-                //     onPressed: _saveTotal,
-                //     style: ElevatedButton.styleFrom(
-                //       backgroundColor: Config.themeColor,
-                //       foregroundColor: Colors.white,
-                //       shape: RoundedRectangleBorder(
-                //         borderRadius: BorderRadius.circular(8),
-                //       ),
-                //     ),
-                //     child: const Text('Save Total'),
-                //   ),
-                // ),
               ],
               const SizedBox(height: 16),
               InputDecorator(
@@ -975,4 +1103,30 @@ class FarmSession {
       date: DateTime.tryParse(json['date'] as String? ?? ''),
     );
   }
+}
+
+class MilkCan {
+  final int id;
+  final String name;
+  final String code;
+  final double tareWeight;
+
+  MilkCan({
+    required this.id,
+    required this.name,
+    required this.code,
+    required this.tareWeight,
+  });
+
+  factory MilkCan.fromJson(Map<String, dynamic> json) {
+    return MilkCan(
+      id: (json['id'] is num) ? (json['id'] as num).toInt() : 0,
+      name: json['name']?.toString() ?? '',
+      code: json['code']?.toString() ?? '',
+      tareWeight: (json['tareweight'] is num) ? (json['tareweight'] as num).toDouble() : 0.0,
+    );
+  }
+
+  @override
+  String toString() => '$name (${tareWeight.toStringAsFixed(2)} kg)';
 }

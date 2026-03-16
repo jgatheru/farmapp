@@ -37,11 +37,26 @@ class _AppointmentListPageState extends State<AppointmentListPage> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
 
+  Map<String, dynamic>? _routeArgs;
+  String? _fromDate;
+  String? _toDate;
+
   @override
   void initState() {
     super.initState();
     _fetchAppointments();
     _searchController.addListener(_debouncedFilterAppointments);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_routeArgs == null) {
+      _routeArgs = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      _fromDate = _routeArgs?['fromDate'];
+      _toDate = _routeArgs?['toDate'];
+      _fetchAppointments();
+    }
   }
 
   // Fetch appointments and compute metrics
@@ -56,10 +71,28 @@ class _AppointmentListPageState extends State<AppointmentListPage> {
       final authToken = sessionProvider.currentUser?.token;
       final employeeid = sessionProvider.currentUser?.employeeid;
 
+      String uri = '$_appointmentsEndpoint?employeeid=$employeeid&reportType=${widget
+          .reportType}';
+
+      if(widget.reportType==1) {
+
+        final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+        final fromDate = args?['fromDate'];
+        final toDate = args?['toDate'];
+        final personid = args?['personid'];
+
+        uri = '$_appointmentsEndpoint'
+            '?employeeid=$personid'
+            '&reportType=${widget.reportType}'
+            '${fromDate != null ? '&fromdate=$fromDate' : ''}'
+            '${toDate != null ? '&todate=$toDate' : ''}';
+
+      }
+      print(uri);
       // Include reportType in the API URL
       final response = await http
           .get(
-        Uri.parse('$_appointmentsEndpoint?employeeid=$employeeid&reportType=${widget.reportType}'),
+        Uri.parse(uri),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $authToken',

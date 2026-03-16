@@ -940,7 +940,7 @@ class _FeedingFormPageState extends State<FeedingFormPage> {
                     ],
                   ),
                 ),
-                readOnly: true,
+                // readOnly: true,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   if (_totalWeight == 0.0) {

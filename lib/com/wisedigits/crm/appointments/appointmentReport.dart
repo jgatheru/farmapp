@@ -23,6 +23,13 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
   bool _isLoading = false;
   String? _errorMessage;
 
+  // Store filter values in the parent widget
+  Facility? _selectedFacility;
+  Person? _selectedPerson;
+  String? _selectedSpeciality;
+  DateTime? _fromDate;
+  DateTime? _toDate;
+
   @override
   void initState() {
     super.initState();
@@ -38,12 +45,12 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
 
     await Future.wait([
       _fetchEntityList(
-        endpoint: '${Config.sisiUrl}/facilitys/getFacilitys.php?employeeid='+employeeid!,
+        endpoint: '${Config.sisiUrl}/facilitys/getFacilitys.php?employeeid=$employeeid!',
         listSetter: (list) => _facilities = list.cast<Facility>(),
         fromJson: Facility.fromJson,
       ),
       _fetchEntityList(
-        endpoint: '${Config.sisiUrl}/persons/getPersons.php?employeeid='+employeeid!,
+        endpoint: '${Config.sisiUrl}/persons/getPersons.php?employeeid=$employeeid!',
         listSetter: (list) => _persons = list.cast<Person>(),
         fromJson: Person.fromJson,
       ),
@@ -72,7 +79,7 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
         final responseData = jsonDecode(response.body);
         if (responseData['success'] == true && responseData['data'] != null) {
           setState(() {
-            listSetter(jsonDecode(response.body)['data']
+            listSetter(responseData['data']
                 .map((json) => fromJson(json as Map<String, dynamic>))
                 .toList());
           });
@@ -104,12 +111,17 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _selectedFacility = selectedFacility;
+      _selectedPerson = selectedPerson;
+      _selectedSpeciality = selectedSpeciality;
+      _fromDate = fromDate;
+      _toDate = toDate;
     });
 
     try {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
       final employeeid = sessionProvider.currentUser?.employeeid;
-      
+
       final queryParams = {
         if (selectedFacility != null) 'facilityid': selectedFacility.id.toString(),
         if (selectedPerson != null) 'personid': selectedPerson.id.toString(),
@@ -131,8 +143,7 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
 
       if (!mounted) return;
 
-      if (response.statusCode == 200) {
-
+      if (response.statusCode == 200) {print(response.body);
         final responseData = jsonDecode(response.body);
         if (responseData['success'] == true && responseData['data'] != null) {
           setState(() {
@@ -169,6 +180,11 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
           facilities: _facilities,
           persons: _persons,
           specialities: _specialities,
+          initialFacility: _selectedFacility,
+          initialPerson: _selectedPerson,
+          initialSpeciality: _selectedSpeciality,
+          initialFromDate: _fromDate,
+          initialToDate: _toDate,
         );
       },
     );
@@ -184,7 +200,6 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
     }
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -309,26 +324,49 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
                       color: WidgetStateProperty.all(
                         index % 2 == 0
                             ? Colors.white
-                            : (Config.backgroundColor ?? Colors.blueGrey).withOpacity(0.05),
+                            : (Config.backgroundColor ?? Colors.blueGrey)
+                            .withOpacity(0.05),
                       ),
                       cells: [
                         DataCell(
                           Container(
                             constraints: BoxConstraints(maxWidth: isLargeScreen ? 200 : 150),
-                            child: Text(
-                              data['employee_name'] ?? 'N/A',
-                              style: TextStyle(
-                                fontSize: 14 * textScaleFactor,
-                                color: Colors.black87,
+                            child: InkWell(
+                              onTap: () {
+                                final args = {
+                                  'personid': data['personid']?.toString(),
+                                  'appointmentdate': data['appointmentdate'],
+                                  'fromDate': _fromDate != null
+                                      ? DateFormat('yyyy-MM-dd').format(_fromDate!)
+                                      : null,
+                                  'toDate': _toDate != null
+                                      ? DateFormat('yyyy-MM-dd').format(_toDate!)
+                                      : null,
+                                };
+                                print('Navigating with args: $args');
+                                Navigator.pushNamed(
+                                  context,
+                                  '/viewCompleteAppointments',
+                                  arguments: args,
+                                );
+                              },
+                              child: Text(
+                                data['employee_name'] ?? 'N/A',
+                                style: TextStyle(
+                                  fontSize: 14 * textScaleFactor,
+                                  color: Config.themeColor ?? Colors.teal,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 2,
                               ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 2,
                             ),
                           ),
                         ),
                         DataCell(
                           Container(
-                            constraints: BoxConstraints(maxWidth: isLargeScreen ? 120 : 100),
+                            constraints:
+                            BoxConstraints(maxWidth: isLargeScreen ? 120 : 100),
                             child: Text(
                               data['appointmentdate'] ?? 'N/A',
                               style: TextStyle(
@@ -396,12 +434,22 @@ class AppointmentFilterDialog extends StatefulWidget {
   final List<Facility> facilities;
   final List<Person> persons;
   final List<String> specialities;
+  final Facility? initialFacility;
+  final Person? initialPerson;
+  final String? initialSpeciality;
+  final DateTime? initialFromDate;
+  final DateTime? initialToDate;
 
   const AppointmentFilterDialog({
     super.key,
     required this.facilities,
     required this.persons,
     required this.specialities,
+    this.initialFacility,
+    this.initialPerson,
+    this.initialSpeciality,
+    this.initialFromDate,
+    this.initialToDate,
   });
 
   @override
@@ -422,8 +470,18 @@ class _AppointmentFilterDialogState extends State<AppointmentFilterDialog> {
   @override
   void initState() {
     super.initState();
-    _fromDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-    _toDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    // Initialize with parent widget's values if provided
+    _selectedFacility = widget.initialFacility;
+    _selectedPerson = widget.initialPerson;
+    _selectedSpeciality = widget.initialSpeciality;
+    _fromDate = widget.initialFromDate ??
+        DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    _toDate = widget.initialToDate ??
+        DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+
+    // Set controller texts
+    _facilityController.text = _selectedFacility?.name ?? '';
+    _personController.text = _selectedPerson?.name ?? '';
     _fromDateController.text = DateFormat('yyyy-MM-dd').format(_fromDate);
     _toDateController.text = DateFormat('yyyy-MM-dd').format(_toDate);
   }
@@ -499,7 +557,8 @@ class _AppointmentFilterDialogState extends State<AppointmentFilterDialog> {
               },
               onSelected: (String selection) {
                 setState(() {
-                  _selectedFacility = widget.facilities.firstWhere((f) => f.name == selection);
+                  _selectedFacility =
+                      widget.facilities.firstWhere((f) => f.name == selection);
                   _facilityController.text = selection;
                 });
               },
@@ -538,7 +597,8 @@ class _AppointmentFilterDialogState extends State<AppointmentFilterDialog> {
               },
               onSelected: (String selection) {
                 setState(() {
-                  _selectedPerson = widget.persons.firstWhere((p) => p.name == selection);
+                  _selectedPerson =
+                      widget.persons.firstWhere((p) => p.name == selection);
                   _personController.text = selection;
                 });
               },
@@ -580,7 +640,8 @@ class _AppointmentFilterDialogState extends State<AppointmentFilterDialog> {
                   onPressed: () {
                     setState(() {
                       _fromDate = DateTime.now();
-                      _fromDateController.text = DateFormat('yyyy-MM-dd').format(_fromDate);
+                      _fromDateController.text =
+                          DateFormat('yyyy-MM-dd').format(_fromDate);
                     });
                   },
                 )
@@ -602,7 +663,8 @@ class _AppointmentFilterDialogState extends State<AppointmentFilterDialog> {
                   onPressed: () {
                     setState(() {
                       _toDate = DateTime.now();
-                      _toDateController.text = DateFormat('yyyy-MM-dd').format(_toDate);
+                      _toDateController.text =
+                          DateFormat('yyyy-MM-dd').format(_toDate);
                     });
                   },
                 )

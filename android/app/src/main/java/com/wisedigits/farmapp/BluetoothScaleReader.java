@@ -208,7 +208,7 @@ public class BluetoothScaleReader implements SerialListener {
                             return 0f;
                         }
                         //weight = reverseWeight(weight+"");
-                        weight-=1.4;
+                        //weight-=1.4;
                         return weight;
                     } catch (NumberFormatException e) {
                         Log.w(TAG, "Invalid ASCII weight format: " + asciiData);
