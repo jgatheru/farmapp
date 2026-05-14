@@ -60,9 +60,10 @@ class _AppointmentDetailsPageState extends State<AppointmentDetailsPage> {
           'personId': widget.appointment.person!.id.toString(),
         if (widget.appointment.appointmentDate != null)
           'appointmentDate': widget.appointment.appointmentDate!,
+        'employeeid': employeeid,
       };
 
-      final uri = Uri.parse('${Config.sisiUrl}/appointments/getAppointments.php')
+      final uri = Uri.parse('${Config.sisiUrl}/appointments/getAppointments.php?employeeid=$employeeid')
           .replace(queryParameters: queryParameters);
 
       developer.log('Fetching appointment with URL: $uri', name: 'AppointmentDetailsPage');

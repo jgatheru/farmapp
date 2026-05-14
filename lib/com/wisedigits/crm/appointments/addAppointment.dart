@@ -548,7 +548,7 @@ class _UpdateAppointmentPageState extends State<UpdateAppointmentPage> {
       final response = await http.get(
         Uri.parse(url),
         headers: {
-          'User-Agent': 'MyFlutterApp/1.0 (your.email@example.com)', // Replace with your app name and contact email
+          'User-Agent': 'MyFlutterApp/1.0 (mugogatheru@gmail.com)', // Replace with your app name and contact email
         },
       );
       if (!mounted) return;

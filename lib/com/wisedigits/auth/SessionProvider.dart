@@ -9,6 +9,7 @@ class User {
   final bool isAgent;
   final String userid;
   final String employeeid;
+  final String agentid;
   final String token;
   final String? avatar; // Optional field
   final String email;
@@ -21,6 +22,7 @@ class User {
     required this.isAgent,
     required this.userid,
     required this.employeeid,
+    required this.agentid,
     required this.token,
     this.avatar,
     required this.email,
@@ -35,6 +37,7 @@ class User {
     'isAgent': isAgent,
     'userid': userid,
     'employeeid': employeeid,
+    'agentid': agentid,
     'token': token,
     'avatar': avatar,
     'email': email,
@@ -50,6 +53,7 @@ class User {
       isAgent: json['isAgent'],
       userid: json['userid'],
       employeeid: json['employeeid'],
+      agentid: json['agentid'],
       token: json['token'],
       avatar: json['avatar'],
       email: json['email'],
@@ -107,6 +111,7 @@ class SessionProvider with ChangeNotifier {
     required bool isAgent,
     required String userid,
     required String employeeid,
+    required String agentid,
     required String token,
     String? avatar,
     required String email,
@@ -119,6 +124,7 @@ class SessionProvider with ChangeNotifier {
       isAgent: isAgent,
       userid: userid,
       employeeid: employeeid,
+      agentid: agentid,
       token: token,
       avatar: avatar,
       email: email,

@@ -79,6 +79,7 @@ class _LoginPageState extends State<LoginPage> {
             isAgent: userData['isAgent'] == 1 || userData['isAgent'] == true,
             userid: userData['userid']?.toString() ?? '',
             employeeid: userData['employeeid']?.toString() ?? '',
+            agentid: userData['agentid']?.toString() ?? '',
             token: responseData['access_token'] ?? '',
             avatar: userData['avatar'],
             email: userData['email'] ?? '',

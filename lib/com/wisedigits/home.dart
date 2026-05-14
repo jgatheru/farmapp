@@ -48,8 +48,8 @@ class _HomeState extends State<Home> {
   String? _error;
   String? _chartError;
 
-  // final String menuApiEndpoint = '${Config.sisiUrl}/statistics.php';
-  final String menuApiEndpoint = '${Config.baseUrl}/statistics/';
+  final String menuApiEndpoint = '${Config.sisiUrl}/statistics.php';
+  // final String menuApiEndpoint = '${Config.baseUrl}/statistics/';
   late String monthlyStatsApiEndpoint = '${Config.sisiUrl}/appointments/monthly_stats.php';
 
   @override
@@ -70,6 +70,7 @@ class _HomeState extends State<Home> {
     final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
     final authToken = sessionProvider.currentUser?.token;
     final employeeid = sessionProvider.currentUser?.employeeid;
+    final agentid = sessionProvider.currentUser?.agentid;
 
     if (authToken == null) {
       if (mounted) {
@@ -81,7 +82,7 @@ class _HomeState extends State<Home> {
       debugPrint('Authentication Error: Token is null.');
       return;
     }
-    final queryParams = {'employeeid': employeeid};
+    final queryParams = {'employeeid': employeeid, 'agentid':agentid};
     final uri = Uri.parse(menuApiEndpoint).replace(queryParameters: queryParams);
 
     try {
@@ -150,6 +151,7 @@ class _HomeState extends State<Home> {
     final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
     final authToken = sessionProvider.currentUser?.token;
     final employeeid = sessionProvider.currentUser?.employeeid;
+    final agentid = sessionProvider.currentUser?.agentid;
 
     if (authToken == null) {
       if (mounted) {
@@ -163,7 +165,7 @@ class _HomeState extends State<Home> {
     }
 
     try {
-      final queryParams = {'employeeid': employeeid};
+      final queryParams = {'employeeid': employeeid, 'agentid': agentid};
       final uri = Uri.parse(monthlyStatsApiEndpoint).replace(queryParameters: queryParams);
 
       final response = await http.get(

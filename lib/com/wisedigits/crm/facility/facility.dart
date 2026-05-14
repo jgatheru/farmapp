@@ -259,9 +259,10 @@ class _FacilityListPageState extends State<FacilityListPage> {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
       final authToken = sessionProvider.currentUser?.token;
       final employeeid = sessionProvider.currentUser?.employeeid;
+      final agentid = sessionProvider.currentUser?.agentid;
 
       final response = await http.get(
-        Uri.parse('${Config.sisiUrl}/facilitys/getFacilitys.php?employeeid='+employeeid!),
+        Uri.parse('${Config.sisiUrl}/facilitys/getFacilitys.php?employeeid='+employeeid!+"&agentid="+agentid!),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $authToken',

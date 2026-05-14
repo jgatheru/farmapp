@@ -26,6 +26,7 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
   // Store filter values in the parent widget
   Facility? _selectedFacility;
   Person? _selectedPerson;
+  Person? _selectedAgent;
   String? _selectedSpeciality;
   DateTime? _fromDate;
   DateTime? _toDate;
@@ -34,6 +35,14 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
   void initState() {
     super.initState();
     _fetchInitialData();
+
+    final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
+    final employeeid = sessionProvider.currentUser?.employeeid;
+
+    _fetchReport(
+      fromDate: DateTime.now(),
+      toDate: DateTime.now(),
+    );
   }
 
   Future<void> _fetchInitialData() async {
@@ -104,6 +113,7 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
   Future<void> _fetchReport({
     Facility? selectedFacility,
     Person? selectedPerson,
+    Person? selectedAgent,
     String? selectedSpeciality,
     DateTime? fromDate,
     DateTime? toDate,
@@ -113,6 +123,7 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
       _errorMessage = null;
       _selectedFacility = selectedFacility;
       _selectedPerson = selectedPerson;
+      _selectedAgent = selectedAgent;
       _selectedSpeciality = selectedSpeciality;
       _fromDate = fromDate;
       _toDate = toDate;
@@ -120,16 +131,18 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
 
     try {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
+      final authToken = sessionProvider.currentUser?.token;
       final employeeid = sessionProvider.currentUser?.employeeid;
 
       final queryParams = {
         if (selectedFacility != null) 'facilityid': selectedFacility.id.toString(),
         if (selectedPerson != null) 'personid': selectedPerson.id.toString(),
+        if(selectedAgent != null) 'agentid': selectedAgent.id.toString(),
         if (selectedSpeciality != null) 'speciality': selectedSpeciality,
         if (fromDate != null) 'fromdate': DateFormat('yyyy-MM-dd').format(fromDate),
         if (toDate != null) 'todate': DateFormat('yyyy-MM-dd').format(toDate),
         'employeeid': employeeid,
-      };
+              };
       final uri = Uri.parse('${Config.sisiUrl}/appointments/getAppointmentReport.php')
           .replace(queryParameters: queryParams);
       print(uri);
@@ -335,6 +348,7 @@ class _AppointmentReportPageState extends State<AppointmentReportPage> {
                               onTap: () {
                                 final args = {
                                   'personid': data['personid']?.toString(),
+                                  'agentid': data['agentid']?.toString(),
                                   'appointmentdate': data['appointmentdate'],
                                   'fromDate': _fromDate != null
                                       ? DateFormat('yyyy-MM-dd').format(_fromDate!)

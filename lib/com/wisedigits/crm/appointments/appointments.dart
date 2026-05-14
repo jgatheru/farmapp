@@ -70,8 +70,9 @@ class _AppointmentListPageState extends State<AppointmentListPage> {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
       final authToken = sessionProvider.currentUser?.token;
       final employeeid = sessionProvider.currentUser?.employeeid;
+      final agentid = sessionProvider.currentUser?.agentid;
 
-      String uri = '$_appointmentsEndpoint?employeeid=$employeeid&reportType=${widget
+      String uri = '$_appointmentsEndpoint?employeeid=$employeeid&agentid=$agentid&reportType=${widget
           .reportType}';
 
       if(widget.reportType==1) {
@@ -79,10 +80,17 @@ class _AppointmentListPageState extends State<AppointmentListPage> {
         final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
         final fromDate = args?['fromDate'];
         final toDate = args?['toDate'];
-        final personid = args?['personid'];
+        var personid = args?['personid'];
+        var agent_id = args?['agentid'];
+
+        print("PERSON: $personid EMPLOYEE: $employeeid");
+        if(personid==null)
+          personid=employeeid;
+
 
         uri = '$_appointmentsEndpoint'
             '?employeeid=$personid'
+            '&agentid=$agent_id'
             '&reportType=${widget.reportType}'
             '${fromDate != null ? '&fromdate=$fromDate' : ''}'
             '${toDate != null ? '&todate=$toDate' : ''}';

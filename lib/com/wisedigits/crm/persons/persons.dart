@@ -439,10 +439,11 @@ class _PersonsListPageState extends State<PersonsListPage> {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
       final authToken = sessionProvider.currentUser?.token;
       final employeeid = sessionProvider.currentUser?.employeeid;
+      final agentid = sessionProvider.currentUser?.agentid;
 
       print(_phpEndpoint);
       final response = await http.get(
-        Uri.parse(_phpEndpoint+'?employeeid='+employeeid!),
+        Uri.parse(_phpEndpoint+'?employeeid='+employeeid!+'&agentid='+agentid!),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $authToken',

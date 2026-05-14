@@ -105,12 +105,12 @@ class _AddFacilityPageState extends State<AddFacilityPage> {
         fromJson: FacilityType.fromJson,
       ),
       // _fetchEntityList(
-      //   endpoint: '${Config.baseUrl}/modules/employees/',
+      //   endpoint: '${Config.sisiUrl}/modules/employees/',
       //   listSetter: (list) => _employees = list.cast<Employee>(),
       //   fromJson: Employee.fromJson,
       // ),
       // _fetchEntityList(
-      //   endpoint: '${Config.baseUrl}/modules/customers/',
+      //   endpoint: '${Config.sisiUrl}/modules/customers/',
       //   listSetter: (list) => _customers = list.cast<Customer>(),
       //   fromJson: Customer.fromJson,
       // ),
@@ -177,7 +177,7 @@ class _AddFacilityPageState extends State<AddFacilityPage> {
       return;
     }
     await _fetchEntityList(
-      endpoint: '${Config.baseUrl}/modules/sys/subregions/?regionid=$regionId',
+      endpoint: '${Config.sisiUrl}/modules/sys/subregions/?regionid=$regionId',
       listSetter: (list) => _subregions = list.cast<Subregion>(),
       fromJson: Subregion.fromJson,
     );
@@ -194,6 +194,7 @@ class _AddFacilityPageState extends State<AddFacilityPage> {
     try {
       final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
       final authToken = sessionProvider.currentUser?.token;
+      final employeeid = sessionProvider.currentUser?.employeeid;
 
       final body = {
         'name': _nameController.text,
@@ -203,15 +204,16 @@ class _AddFacilityPageState extends State<AddFacilityPage> {
         'tel': _telController.text,
         'facilitytypeid': _facilityTypeId?.toString() ?? '2',
         'keyaccounts': _keyaccounts,
-        'employeeid': _employeeId?.toString(),
+        'employeeid': employeeid,
         'customerid': _customerId?.toString(),
         'status': _status.toString(),
         'category': _categoryController.text.isEmpty ? null : _categoryController.text, // Updated to use text field
       };
 
+      print('${Config.sisiUrl}/facilitys/create.php}');
       final isEdit = widget.facility != null;
       final response = await http.post(
-        Uri.parse(isEdit ? '${Config.baseUrl}/modules/facilities/${widget.facility!.id}' : '${Config.baseUrl}/modules/facilities/'),
+        Uri.parse(isEdit ? '${Config.sisiUrl}/facilitys/create.php${widget.facility!.id}' : '${Config.sisiUrl}/facilitys/create.php'),
         headers: {
           'Accept': 'application/json',
           'Authorization': 'Bearer $authToken',
